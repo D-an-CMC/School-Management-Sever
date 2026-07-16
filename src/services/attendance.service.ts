@@ -72,7 +72,7 @@ export class AttendanceService {
   }
 
   async batchUpdate(records: { attendanceId: number; status: string; note?: string }[]) {
-    const results = [];
+    const results: any[] = [];
     for (const rec of records) {
       const result = await supabase
         .from('attendances')

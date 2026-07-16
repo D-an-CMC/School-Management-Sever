@@ -55,7 +55,7 @@ export class GradeService {
  }
 
  async batchUpdate(updates: { gradeItemId: number; score: number }[]) {
- const results = [];
+ const results: any[] = [];
  for (const u of updates) {
  const r = await this.updateGrade(u.gradeItemId, u.score);
  results.push(r);
