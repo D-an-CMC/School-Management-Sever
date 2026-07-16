@@ -97,24 +97,54 @@ const updateSchema = z.object({
   phone: z.string().optional(),
   is_active: z.boolean().optional(),
   role: z.string().optional(),
-full_name: z.string().optional(),
-gender: z.string().optional(),
-date_of_birth: z.string().optional(),
-class_id: z.coerce.number().optional(),
-student_code: z.string().optional(),
-teacher_code: z.string().optional(),
-department: z.string().optional(),
+  full_name: z.string().optional(),
+  gender: z.string().optional(),
+  date_of_birth: z.string().optional(),
+  class_id: z.coerce.number().optional(),
+  student_code: z.string().optional(),
+  teacher_code: z.string().optional(),
+  department: z.string().optional(),
+  password: z.string().min(6).optional(),
 });
 
-router.put('/:id', roleMiddleware(['Admin']), async (req: any, res) => {
+router.delete('/:id', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const userId = Number(req.params.id)
+    if (isNaN(userId)) {
+      return res.status(400).json({ success: false, error: 'Invalid user ID', code: 'INVALID_ID' })
+    }
+    if (req.user!.userId === userId) {
+      return res.status(400).json({ success: false, error: 'Khong duoc xoa tai khoan cua chinh minh', code: 'CANNOT_DELETE_SELF' })
+    }
+    await supabase.from("students").delete().eq("user_id", userId)
+    await supabase.from("teachers").delete().eq("user_id", userId)
+    const { error: userError } = await supabase.from("users").delete().eq("user_id", userId)
+    if (userError) {
+      return res.status(400).json({ success: false, error: userError.message, code: 'DELETE_FAILED' })
+    }
+    return res.json({ success: true })
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'DELETE_ERROR' })
+  }
+});
+
+router.put('/:id', authMiddleware, async (req: any, res) => {
   try {
     const patch = updateSchema.parse(req.body);
-    const result = await userService.updateUser(Number(req.params.id), patch);
+    const userId = Number(req.params.id);
+    if (req.user!.userId !== userId && req.user!.role !== 'Admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden', code: 'FORBIDDEN' });
+    }
+    const data: any = { ...patch };
+    if (req.user!.userId !== userId) { delete data.role; }
+    const result = await userService.updateUser(userId, data);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
   }
 });
+
+
 
 export default router;

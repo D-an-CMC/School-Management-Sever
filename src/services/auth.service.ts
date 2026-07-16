@@ -20,7 +20,7 @@ export class AuthService {
   async login(input: LoginInput): Promise<{ token: string; user: AuthUser }> {
     const { data, error } = await supabase
       .from('users')
-      .select('user_id, email, role_id, is_active, auth_id, username')
+      .select('user_id, email, role_id, is_active, auth_id, username, password')
       .eq('email', input.email)
       .single();
 
@@ -29,6 +29,9 @@ export class AuthService {
     }
     if (!data.is_active) {
       throw new Error('Tài khoản đã bị khóa');
+    }
+    if (data.password !== input.password) {
+      throw new Error('Email hoặc mật khẩu không đúng');
     }
 
     const roleName = await this.getRoleName(data.role_id);

@@ -120,31 +120,31 @@ export class UserService {
     }
 
     const roleId = roleResult.data.role_id;
-  let studentCode: string | undefined = input.student_code;
-  let teacherCode: string | undefined = input.teacher_code;
+    let studentCode: string | undefined = input.student_code;
+    let teacherCode: string | undefined = input.teacher_code;
 
-  let schoolYearIdForStudent: number | undefined
-  if (input.role === 'HocSinh-PhuHuynh' && !studentCode && input.class_id) {
-    schoolYearIdForStudent = input.school_year_id
-    if (!schoolYearIdForStudent) {
-      const classQuery = await supabase.from('classes').select('school_year_id').eq('class_id', input.class_id).single()
-      schoolYearIdForStudent = classQuery.data?.school_year_id as number | undefined
+    let schoolYearIdForStudent: number | undefined
+    if (input.role === 'HocSinh-PhuHuynh' && !studentCode && input.class_id) {
+      schoolYearIdForStudent = input.school_year_id
+      if (!schoolYearIdForStudent) {
+        const classQuery = await supabase.from('classes').select('school_year_id').eq('class_id', input.class_id).single()
+        schoolYearIdForStudent = classQuery.data?.school_year_id as number | undefined
+      }
+      if (schoolYearIdForStudent) {
+        studentCode = await generateStudentCode(schoolYearIdForStudent)
+      }
     }
-    if (schoolYearIdForStudent) {
-      studentCode = await generateStudentCode(schoolYearIdForStudent)
+    if (input.role === 'GiaoVien' && !teacherCode) {
+      teacherCode = await generateTeacherCode();
     }
-  }
-  if (input.role === 'GiaoVien' && !teacherCode) {
-    teacherCode = await generateTeacherCode();
-  }
 
-  const nameSlug = toSlug(input.full_name || input.username || '');
+    const nameSlug = toSlug(input.full_name || input.username || '');
 
- input.email = input.role === 'HocSinh-PhuHuynh'
-   ? (studentCode ? `${studentCode}@cmc.edu.vn` : input.email)
-   : input.role === 'GiaoVien'
-   ? (teacherCode ? `${nameSlug}.${teacherCode}@cmc.edu.vn` : input.email)
-   : input.email;
+    input.email = input.role === 'HocSinh-PhuHuynh'
+      ? (studentCode ? `${studentCode}@cmc.edu.vn` : input.email)
+      : input.role === 'GiaoVien'
+        ? (teacherCode ? `${nameSlug}.${teacherCode}@cmc.edu.vn` : input.email)
+        : input.email;
 
     const { data: existingUser } = await supabase
       .from('users')
@@ -233,52 +233,53 @@ export class UserService {
     });
   }
 
-async updateUser(userId: number, patch: Partial<CreateUserInput>) {
-  const updateData: any = {};
-  if (patch.email !== undefined) updateData.email = patch.email;
-  if (patch.username !== undefined) updateData.username = patch.username;
-  if (patch.phone !== undefined) updateData.phone = patch.phone;
-  if (patch.is_active !== undefined) updateData.is_active = patch.is_active;
-  if (patch.role !== undefined) {
-    const { data: roleRow } = await supabase.from("roles").select("role_id").eq("role_name", patch.role).single();
-    if (roleRow) updateData.role_id = roleRow.role_id;
+  async updateUser(userId: number, patch: Partial<CreateUserInput>) {
+    const updateData: any = {};
+    if (patch.email !== undefined) updateData.email = patch.email;
+    if (patch.username !== undefined) updateData.username = patch.username;
+    if (patch.phone !== undefined) updateData.phone = patch.phone;
+    if (patch.is_active !== undefined) updateData.is_active = patch.is_active;
+    if (patch.password !== undefined) updateData.password = patch.password;
+    if (patch.role !== undefined) {
+      const { data: roleRow } = await supabase.from("roles").select("role_id").eq("role_name", patch.role).single();
+      if (roleRow) updateData.role_id = roleRow.role_id;
+    }
+
+    const { error: userError } = await supabase
+      .from("users")
+      .update(updateData)
+      .eq("user_id", userId);
+    console.log("[updateUser] userId:", userId, "updateData:", JSON.stringify(updateData), "error:", userError);
+    if (userError) {
+      return errResp("Cập nhật thất bại", "UPDATE_FAILED");
+    }
+
+    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.class_id !== undefined || patch.student_code !== undefined) {
+      const studentData: any = {};
+      if (patch.full_name !== undefined) studentData.full_name = patch.full_name;
+      if (patch.gender !== undefined) studentData.gender = patch.gender;
+      if (patch.date_of_birth !== undefined) studentData.date_of_birth = patch.date_of_birth;
+      if (patch.class_id !== undefined) studentData.class_id = patch.class_id;
+      if (patch.student_code !== undefined) studentData.student_code = patch.student_code;
+      const { error: studentError } = await supabase.from("students").update(studentData).eq("user_id", userId);
+      if (studentError) return errResp(studentError.message, "UPDATE_STUDENT_FAILED");
+    }
+
+    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.phone !== undefined || patch.teacher_code !== undefined || patch.department !== undefined) {
+      const teacherData: any = {};
+      if (patch.full_name !== undefined) teacherData.full_name = patch.full_name;
+      if (patch.gender !== undefined) teacherData.gender = patch.gender;
+      if (patch.date_of_birth !== undefined) teacherData.date_of_birth = patch.date_of_birth;
+      if (patch.phone !== undefined) teacherData.phone = patch.phone;
+      if (patch.teacher_code !== undefined) teacherData.teacher_code = patch.teacher_code;
+      if (patch.department !== undefined) teacherData.department = patch.department;
+      const { error: teacherError } = await supabase.from("teachers").update(teacherData).eq("user_id", userId);
+      if (teacherError) return errResp(teacherError.message, "UPDATE_TEACHER_FAILED");
+    }
+
+    const { data } = await supabase.from("users").select("*").eq("user_id", userId).single();
+    return success(data);
   }
-
-  const { error: userError } = await supabase
-    .from("users")
-    .update(updateData)
-    .eq("user_id", userId);
-
-  if (userError) {
-    return errResp("Cập nhật thất bại", "UPDATE_FAILED");
-  }
-
-  if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.class_id !== undefined || patch.student_code !== undefined) {
-    const studentData: any = {};
-    if (patch.full_name !== undefined) studentData.full_name = patch.full_name;
-    if (patch.gender !== undefined) studentData.gender = patch.gender;
-    if (patch.date_of_birth !== undefined) studentData.date_of_birth = patch.date_of_birth;
-    if (patch.class_id !== undefined) studentData.class_id = patch.class_id;
-    if (patch.student_code !== undefined) studentData.student_code = patch.student_code;
-    const { error: studentError } = await supabase.from("students").update(studentData).eq("user_id", userId);
-    if (studentError) return errResp(studentError.message, "UPDATE_STUDENT_FAILED");
-  }
-
-  if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.phone !== undefined || patch.teacher_code !== undefined || patch.department !== undefined) {
-    const teacherData: any = {};
-    if (patch.full_name !== undefined) teacherData.full_name = patch.full_name;
-    if (patch.gender !== undefined) teacherData.gender = patch.gender;
-    if (patch.date_of_birth !== undefined) teacherData.date_of_birth = patch.date_of_birth;
-    if (patch.phone !== undefined) teacherData.phone = patch.phone;
-    if (patch.teacher_code !== undefined) teacherData.teacher_code = patch.teacher_code;
-    if (patch.department !== undefined) teacherData.department = patch.department;
-    const { error: teacherError } = await supabase.from("teachers").update(teacherData).eq("user_id", userId);
-    if (teacherError) return errResp(teacherError.message, "UPDATE_TEACHER_FAILED");
-  }
-
-  const { data } = await supabase.from("users").select("*").eq("user_id", userId).single();
-  return success(data);
-}
 
 
   async getStats() {
