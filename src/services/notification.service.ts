@@ -3,7 +3,7 @@ import { success, error as errResp } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class NotificationService {
-  async findByUser(userId: number, params: { page: number; limit: number }) {
+  async findByUser(userId: number, params: { page?: number; limit?: number }) {
     const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
     const result = await supabase
@@ -22,7 +22,7 @@ export class NotificationService {
     };
   }
 
-  async findAll(params: { page: number; limit: number }) {
+  async findAll(params: { page?: number; limit?: number }) {
     const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
     const result = await supabase

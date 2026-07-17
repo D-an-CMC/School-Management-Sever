@@ -3,7 +3,7 @@ import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class ActivityService {
-  async findMany(params: { classId?: number; semesterId?: number; page: number; limit: number }) {
+  async findMany(params: { classId?: number; semesterId?: number; page?: number; limit?: number }) {
     const offset = buildPagination({ page: params.page, limit: params.limit });
 
     let query = supabase.from('activities').select('*', { count: 'exact' });

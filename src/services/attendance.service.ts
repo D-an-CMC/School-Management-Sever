@@ -3,7 +3,7 @@ import { success, error as errResp } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class AttendanceService {
-  async findSessions(params: { teacherId?: number; page: number; limit: number }) {
+  async findSessions(params: { teacherId?: number; page?: number; limit?: number }) {
     const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
     let q = supabase.from('attendance_sessions').select('*', { count: 'exact' });

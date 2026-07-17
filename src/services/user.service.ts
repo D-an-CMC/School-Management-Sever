@@ -65,7 +65,7 @@ async function generateTeacherCode(): Promise<string> {
 }
 
 export class UserService {
-  async findMany(params: { search?: string; role?: string; page: number; limit: number }) {
+  async findMany(params: { search?: string; role?: string; page?: number; limit?: number }) {
     const offset = (params.page - 1) * params.limit;
 
     let q = supabase

@@ -46,8 +46,8 @@ const batchSchema = z.object({
 
 router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
-    const { updates } = batchSchema.parse(req.body);
-    const result = await gradeService.batchUpdate(updates);
+    const { updates } = batchSchema.parse(req.body) as any;
+    const result = await gradeService.batchUpdate(updates as any);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {

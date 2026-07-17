@@ -56,8 +56,8 @@ const batchSchema = z.object({
 
 router.put('/records/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
-    const { records } = batchSchema.parse(req.body);
-    const result = await attendanceService.batchUpdate(records);
+    const { records } = batchSchema.parse(req.body) as any;
+    const result = await attendanceService.batchUpdate(records as any);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });

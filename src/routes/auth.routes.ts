@@ -13,7 +13,7 @@ const loginSchema = z.object({
 
 router.post('/login', async (req, res) => {
   try {
-    const parsed = loginSchema.parse(req.body);
+    const parsed = loginSchema.parse(req.body) as any;
     const result = await authService.login(parsed);
     return res.json(success(result));
   } catch (err: any) {

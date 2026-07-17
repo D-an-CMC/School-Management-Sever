@@ -3,7 +3,7 @@ import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class ClassService {
- async findMany(params: { teacherId?: number; page: number; limit: number }) {
+ async findMany(params: { teacherId?: number; page?: number; limit?: number }) {
  const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
  let q = supabase.from('classes').select('*', { count: 'exact' });

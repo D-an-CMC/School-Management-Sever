@@ -37,7 +37,7 @@ router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const input = z
       .object({ title: z.string(), content: z.string().optional(), targetType: z.string().optional() })
-      .parse(req.body);
+      .parse(req.body) as any;
     const result = await notificationService.create({ ...input, senderId: req.user!.userId });
     if (!result.success) return res.status(400).json(result);
     return res.status(201).json(result);

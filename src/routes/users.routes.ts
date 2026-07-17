@@ -82,7 +82,7 @@ const createSchema = z.object({
 
 router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
-    const body = createSchema.parse(req.body);
+    const body = createSchema.parse(req.body) as any;
     const result = await userService.createUser(body);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);

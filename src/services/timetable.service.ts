@@ -3,7 +3,7 @@ import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class TimetableService {
-  async findMany(params: { teacherId?: number; classId?: number; page: number; limit: number }) {
+  async findMany(params: { teacherId?: number; classId?: number; page?: number; limit?: number }) {
     const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
     let q = supabase.from('timetables').select('*', { count: 'exact' });
