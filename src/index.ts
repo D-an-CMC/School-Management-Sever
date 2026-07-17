@@ -11,6 +11,10 @@ const app = express();
 app.use(cors(corsOptions));
 app.use(express.json());
 
+app.get('/', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 app.use('/api', routes);
 
 app.use(errorMiddleware);
