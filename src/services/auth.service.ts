@@ -11,6 +11,8 @@ export interface AuthUser {
   email: string;
   role: string;
   name: string;
+  teacherId?: number;
+  studentId?: number;
   avatar?: string;
   department?: string;
   classCode?: string;
@@ -44,11 +46,24 @@ export class AuthService {
 
     const token = signToken(payload);
 
+    let teacherId: number | undefined;
+    let studentId: number | undefined;
+
+    if (roleName === 'GiaoVien') {
+      const { data: t } = await supabase.from('teachers').select('teacher_id').eq('user_id', data.user_id).maybeSingle();
+      teacherId = t?.teacher_id;
+    } else if (roleName === 'HocSinh-PhuHuynh') {
+      const { data: s } = await supabase.from('students').select('student_id').eq('user_id', data.user_id).maybeSingle();
+      studentId = s?.student_id;
+    }
+
     const user: AuthUser = {
       id: data.user_id,
       email: data.email,
       role: roleName,
       name: data.username || data.email,
+      teacherId,
+      studentId,
     };
 
     return { token, user };
@@ -67,11 +82,24 @@ export class AuthService {
 
     const roleName = await this.getRoleName(data.role_id);
 
+    let teacherId: number | undefined;
+    let studentId: number | undefined;
+
+    if (roleName === 'GiaoVien') {
+      const { data: t } = await supabase.from('teachers').select('teacher_id').eq('user_id', userId).maybeSingle();
+      teacherId = t?.teacher_id;
+    } else if (roleName === 'HocSinh-PhuHuynh') {
+      const { data: s } = await supabase.from('students').select('student_id').eq('user_id', userId).maybeSingle();
+      studentId = s?.student_id;
+    }
+
     return {
       id: data.user_id,
       email: data.email,
       role: roleName,
       name: data.username || data.email,
+      teacherId,
+      studentId,
     };
   }
 

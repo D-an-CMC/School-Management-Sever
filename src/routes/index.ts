@@ -12,6 +12,7 @@ import aiRoutes from './ai.routes';
 import notificationsRoutes from './notifications.routes';
 import permissionsRoutes from './permissions.routes';
 import activitiesRoutes from './activities.routes';
+import studentSelfRoutes from './student-self.routes';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use('/school-years', schoolYearsRoutes);
 router.use('/grades', gradesRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/timetables', timetableRoutes);
+router.use('/student-self', studentSelfRoutes);
 router.use('/ai', aiRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/permissions', permissionsRoutes);

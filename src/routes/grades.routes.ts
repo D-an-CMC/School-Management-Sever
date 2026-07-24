@@ -7,7 +7,7 @@ import { roleMiddleware } from '../middleware/role.middleware';
 const router = Router();
 router.use(authMiddleware);
 
-router.get('/class/:classId', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.get('/class/:classId', roleMiddleware(['Admin', 'GiaoVien', 'HocSinh-PhuHuynh']), async (req: any, res) => {
   try {
     const classId = Number(req.params.classId);
     const result = await gradeService.findByClass(classId);

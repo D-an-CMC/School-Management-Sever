@@ -14,7 +14,7 @@ const querySchema = z.object({
   limit: z.coerce.number().default(20),
 });
 
-router.get('/', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.get('/', roleMiddleware(['Admin', 'GiaoVien', 'HocSinh-PhuHuynh']), async (req: any, res) => {
   try {
     const q = querySchema.parse(req.query);
     const result = await activityService.findMany(q);

@@ -29,8 +29,16 @@ router.get('/', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => 
 
 router.get('/:id', async (req: any, res) => {
   try {
+    const userId = (req as any).user?.userId;
     const result = await studentService.findById(Number(req.params.id));
     if (!result.success) return res.status(404).json(result);
+    const student: any = result.data;
+    if (userId && student.user_id !== userId) {
+      const userRole = (req as any).user?.role;
+      if (userRole !== 'Admin' && userRole !== 'GiaoVien') {
+        return res.status(403).json({ success: false, error: 'Không có quyền truy cập', code: 'FORBIDDEN' });
+      }
+    }
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message });
