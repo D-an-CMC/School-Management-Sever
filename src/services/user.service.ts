@@ -303,6 +303,6 @@ export class UserService {
   }
 }
 
-export { generateStudentCode };
+export { generateStudentCode, generateTeacherCode };
 
 export const userService = new UserService();
