@@ -208,6 +208,11 @@ export class UserService {
     }
 
     if (input.role === 'GiaoVien') {
+  let subjectId: number | null = null;
+  if (input.department) {
+    const { data: subj } = await supabase.from('subjects').select('subject_id').eq('subject_name', input.department).maybeSingle();
+    subjectId = subj?.subject_id ?? null;
+  }
       const { error: teacherError } = await supabase.from('teachers').insert({
         user_id: userId,
         teacher_code: teacherCode || null,
@@ -215,7 +220,7 @@ export class UserService {
         gender: input.gender || null,
         date_of_birth: input.date_of_birth || null,
         phone: input.phone || null,
-        department: input.department || null,
+        subject_id: subjectId,
       });
 
       if (teacherError) {
@@ -279,7 +284,10 @@ export class UserService {
       if (patch.date_of_birth !== undefined) teacherData.date_of_birth = patch.date_of_birth;
       if (patch.phone !== undefined) teacherData.phone = patch.phone;
       if (patch.teacher_code !== undefined) teacherData.teacher_code = patch.teacher_code;
-      if (patch.department !== undefined) teacherData.department = patch.department;
+      if (patch.department !== undefined) {
+        const { data: subj } = await supabase.from('subjects').select('subject_id').eq('subject_name', patch.department).maybeSingle();
+        teacherData.subject_id = subj?.subject_id ?? null;
+      }
       const { error: teacherError } = await supabase.from("teachers").update(teacherData).eq("user_id", userId);
       if (teacherError) return errResp(teacherError.message, "UPDATE_TEACHER_FAILED");
     }

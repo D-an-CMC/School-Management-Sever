@@ -7,6 +7,20 @@ import { supabase } from '../config/supabase';
 
 const router = Router();
 
+router.get('/departments', async (_req: any, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('teachers')
+      .select('department')
+      .not('department', 'is', null)
+    if (error) throw error
+    const unique = Array.from(new Set((data as any[]).map((r) => r.department).filter(Boolean))).sort()
+    return res.json({ success: true, data: unique })
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message })
+  }
+})
+
 router.get('/public/accounts', async (req: any, res) => {
   try {
     const { data, error } = await supabase

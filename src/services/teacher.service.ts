@@ -18,6 +18,9 @@ export class TeacherService {
       return error(result.error.message, 'DB_ERROR');
     }
 
+    const allSubjects = await supabase.from('subjects').select('subject_id, subject_name');
+    const subjectMap = new Map((allSubjects.data || []).map((s: any) => [s.subject_id, s.subject_name]));
+
     const teachers = await Promise.all((result.data ?? []).map(async (t: any) => {
       let email = '';
       let homeroomClassName = '';
@@ -29,7 +32,14 @@ export class TeacherService {
         const { data: cls } = await supabase.from('classes').select('class_name').eq('homeroom_teacher_id', t.teacher_id).maybeSingle();
         if (cls) homeroomClassName = cls.class_name || '';
       }
-      return { ...t, email, status: 'active', date_of_birth: t.date_of_birth || null, homeroom_class_name: homeroomClassName };
+      return {
+        ...t,
+        email,
+        status: 'active',
+        date_of_birth: t.date_of_birth || null,
+        homeroom_class_name: homeroomClassName,
+        subject: subjectMap.get(t.subject_id) || null
+      };
     }));
 
     return {
