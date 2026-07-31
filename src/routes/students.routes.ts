@@ -50,6 +50,18 @@ router.get('/stats/count', roleMiddleware(['Admin']), async (_req, res) => {
   return res.json(result);
 });
 
+router.get('/stats/grade', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
+  const result = await studentService.getStatsByGrade();
+  if (!result.success) return res.status(400).json(result);
+  return res.json(result);
+});
+
+router.get('/stats/attendance', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
+  const result = await studentService.getAttendanceStats();
+  if (!result.success) return res.status(400).json(result);
+  return res.json(result);
+});
+
 const previewSchema = z.object({ classId: z.coerce.number().optional(), schoolYearId: z.coerce.number().optional() });
 
 router.get('/preview/code', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {

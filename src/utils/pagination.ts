@@ -16,7 +16,7 @@ export function buildPagination(params: PaginationParams): {
   limit: number;
 } {
   const page = Math.max(1, params.page);
-  const limit = Math.min(500, Math.max(1, params.limit));
+  const limit = Math.min(5000, Math.max(1, params.limit));
   return { offset: (page - 1) * limit, limit };
 }
 

@@ -1,4 +1,4 @@
-import { supabase } from '../config/supabase';
+﻿import { supabase } from '../config/supabase';
 import { success, error as errResp } from '../utils/response';
 
 export interface CreateUserInput {
@@ -16,6 +16,10 @@ export interface CreateUserInput {
   teacher_code?: string;
   department?: string;
   school_year_id?: number;
+  address?: string;
+  enrollment_date?: string;
+  parent_full_name?: string;
+  parent_phone?: string;
 }
 
 function toSlug(name: string): string {
@@ -73,8 +77,8 @@ export class UserService {
       .select('user_id, email, username, phone, is_active, role_id, roles(role_name)', { count: 'exact' });
 
     if (params.search) {
-      q = q.or(`email.ilike.%${params.search}%,username.ilike.%${params.search}%`);
-    }
+    q = q.or(`email.ilike.%${params.search}%,username.ilike.%${params.search}%`);
+  }
 
     const result = await q
       .order('created_at', { ascending: false })
@@ -254,13 +258,16 @@ export class UserService {
       return errResp("Cập nhật thất bại", "UPDATE_FAILED");
     }
 
-    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.class_id !== undefined || patch.student_code !== undefined) {
+    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.class_id !== undefined || patch.student_code !== undefined || patch.address !== undefined || patch.parent_full_name !== undefined || patch.parent_phone !== undefined) {
       const studentData: any = {};
       if (patch.full_name !== undefined) studentData.full_name = patch.full_name;
       if (patch.gender !== undefined) studentData.gender = patch.gender;
       if (patch.date_of_birth !== undefined) studentData.date_of_birth = patch.date_of_birth;
       if (patch.class_id !== undefined) studentData.class_id = patch.class_id;
       if (patch.student_code !== undefined) studentData.student_code = patch.student_code;
+    if (patch.address !== undefined) studentData.address = patch.address;
+    if (patch.parent_full_name !== undefined) studentData.parent_full_name = patch.parent_full_name;
+    if (patch.parent_phone !== undefined) studentData.parent_phone = patch.parent_phone;
       const { error: studentError } = await supabase.from("students").update(studentData).eq("user_id", userId);
       if (studentError) return errResp(studentError.message, "UPDATE_STUDENT_FAILED");
     }
