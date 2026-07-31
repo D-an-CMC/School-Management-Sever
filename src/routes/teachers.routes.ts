@@ -40,6 +40,16 @@ router.get('/stats/summary', roleMiddleware(['Admin']), async (_req, res) => {
  return res.json(result);
 });
 
+router.get('/:id/subjects', async (req: any, res) => {
+  try {
+    const result = await teacherService.getSubjects(Number(req.params.id));
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
+  }
+});
+
 router.get('/preview/code', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
  try {
   const code = await generateTeacherCode();
