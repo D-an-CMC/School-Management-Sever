@@ -2,72 +2,98 @@ import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 
 export class GradeService {
- async findByClass(classId: number) {
- const { data: students } = await supabase
- .from('students')
- .select('student_id, student_code, full_name')
- .eq('class_id', classId)
- .order('full_name');
+  async findByClass(classId: number) {
+    const { data: students } = await supabase
+      .from('students')
+      .select('student_id, student_code, full_name')
+      .eq('class_id', classId)
+      .order('full_name');
 
- const { data: gradeItems } = await supabase
- .from('grade_items')
- .select('student_id, score, grade_type_id, grade_types(type_id, type_name)')
- .eq('class_id', classId);
+    const { data: subjectResults } = await supabase
+      .from('subject_results')
+      .select('result_id, student_id')
+      .eq('class_id', classId);
 
- const gradesByStudent = new Map<number, any[]>();
- (gradeItems || []).forEach((g: any) => {
- const sid = g.student_id;
- if (!gradesByStudent.has(sid)) gradesByStudent.set(sid, []);
- gradesByStudent.get(sid)!.push({
- grade_type_name: g.grade_types?.type_name || '',
- score: g.score,
- });
- });
+    if (!subjectResults || subjectResults.length === 0) {
+      return success(
+        (students ?? []).map((s: any) => ({
+          student_id: s.student_id,
+          student_code: s.student_code,
+          full_name: s.full_name,
+          grades: [],
+        }))
+      );
+    }
 
- const rows = (students || []).map((s: any) => ({
- student_id: s.student_id,
- student_code: s.student_code,
- full_name: s.full_name,
- grades: gradesByStudent.get(s.student_id) || [],
- }));
+    const resultIds = subjectResults.map((r) => r.result_id);
+    const studentIdSet = new Set(subjectResults.map((r) => r.student_id));
 
- return success(rows);
- }
+    const { data: gradeItems } = await supabase
+      .from('grade_items')
+      .select('result_id, score, grade_type_id, grade_types(type_id, type_name)')
+      .in('result_id', resultIds);
 
- async gradeTypes() {
- const result = await supabase.from('grade_types').select('*').order('grade_type_id');
+    const filteredStudents = (students ?? []).filter((s: any) => studentIdSet.has(s.student_id));
 
- if (result.error) {
- return error(result.error.message, 'DB_ERROR');
- }
+    const gradesByStudent = new Map<number, any[]>();
+    (gradeItems || []).forEach((g: any) => {
+      const sid = (g as any).result_id;
+      if (!gradesByStudent.has(sid)) gradesByStudent.set(sid, []);
+      gradesByStudent.get(sid)!.push({
+        grade_type_name: (g as any).grade_types?.type_name || '',
+        score: (g as any).score,
+      });
+    });
 
- return success(result.data ?? []);
- }
+    const rows = filteredStudents.map((s: any) => ({
+      student_id: s.student_id,
+      student_code: s.student_code,
+      full_name: s.full_name,
+      grades: gradesByStudent.get(s.student_id) || [],
+    }));
 
- async updateGrade(gradeItemId: number, score: number) {
- const result = await supabase.from('grade_items').update({ score }).eq('grade_item_id', gradeItemId).select().single();
+    return success(rows);
+  }
 
- if (result.error || !result.data) {
- return error('Cập nhật điểm thất bại', 'UPDATE_FAILED');
- }
+  async gradeTypes() {
+    const result = await supabase.from('grade_types').select('*').order('grade_type_id');
 
- return success(result.data);
- }
+    if (result.error) {
+      return error(result.error.message, 'DB_ERROR');
+    }
 
- async batchUpdate(updates: { gradeItemId: number; score: number }[]) {
- const results: any[] = [];
- for (const u of updates) {
- const r = await this.updateGrade(u.gradeItemId, u.score);
- results.push(r);
- }
+    return success(result.data ?? []);
+  }
 
- const failed = results.filter((r) => !(r as any).success);
- if (failed.length > 0) {
- return error(`${failed.length} cập nhật thất bại`, 'BATCH_PARTIAL_FAILURE');
- }
+  async updateGrade(gradeItemId: number, score: number) {
+    const result = await supabase
+      .from('grade_items')
+      .update({ score })
+      .eq('grade_item_id', gradeItemId)
+      .select()
+      .single();
 
- return success(results);
- }
+    if (result.error || !result.data) {
+      return error('Cập nhật điểm thất bại', 'UPDATE_FAILED');
+    }
+
+    return success(result.data);
+  }
+
+  async batchUpdate(updates: { gradeItemId: number; score: number }[]) {
+    const results: any[] = [];
+    for (const u of updates) {
+      const r = await this.updateGrade(u.gradeItemId, u.score);
+      results.push(r);
+    }
+
+    const failed = results.filter((r) => !(r as any).success);
+    if (failed.length > 0) {
+      return error(`${failed.length} cập nhật thất bại`, 'BATCH_PARTIAL_FAILURE');
+    }
+
+    return success(results);
+  }
 }
 
 export const gradeService = new GradeService();

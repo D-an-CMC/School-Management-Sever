@@ -13,6 +13,7 @@ import notificationsRoutes from './notifications.routes';
 import permissionsRoutes from './permissions.routes';
 import activitiesRoutes from './activities.routes';
 import studentSelfRoutes from './student-self.routes';
+import securityLogsRoutes from './security-logs.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/ai', aiRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/permissions', permissionsRoutes);
 router.use('/activities', activitiesRoutes);
+router.use('/security-logs', securityLogsRoutes);
 
 export default router;
