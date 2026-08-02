@@ -20,6 +20,10 @@ export interface CreateUserInput {
   enrollment_date?: string;
   parent_full_name?: string;
   parent_phone?: string;
+  department_id?: number;
+  emergency_phone?: string;
+  title?: string;
+  schedule_slot?: string;
 }
 
 function toSlug(name: string): string {
@@ -277,7 +281,7 @@ export class UserService {
       if (studentError) return errResp(studentError.message, "UPDATE_STUDENT_FAILED");
     }
 
-    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.phone !== undefined || patch.teacher_code !== undefined || patch.department !== undefined) {
+    if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.phone !== undefined || patch.teacher_code !== undefined || patch.department !== undefined || patch.title !== undefined || patch.schedule_slot !== undefined) {
       const teacherData: any = {};
       if (patch.full_name !== undefined) teacherData.full_name = patch.full_name;
       if (patch.gender !== undefined) teacherData.gender = patch.gender;

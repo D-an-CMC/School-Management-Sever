@@ -14,7 +14,7 @@ router.get('/departments', async (_req: any, res) => {
       .select('department')
       .not('department', 'is', null)
     if (error) throw error
-    const unique = Array.from(new Set((data as any[]).map((r) => r.department).filter(Boolean))).sort()
+    const unique = (data as any[]).map((r) => r.department_name as string)
     return res.json({ success: true, data: unique })
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message })
@@ -92,6 +92,10 @@ const createSchema = z.object({
   student_code: z.string().optional(),
   teacher_code: z.string().optional(),
   department: z.string().optional(),
+  department_id: z.coerce.number().optional(),
+  emergency_phone: z.string().optional(),
+  title: z.string().optional(),
+  schedule_slot: z.string().optional(),
 }).passthrough();
 
 router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
@@ -118,7 +122,20 @@ const updateSchema = z.object({
   student_code: z.string().optional(),
   teacher_code: z.string().optional(),
   department: z.string().optional(),
+  department_id: z.coerce.number().optional(),
+  emergency_phone: z.string().optional(),
+  title: z.string().optional(),
+  schedule_slot: z.string().optional(),
   password: z.string().min(6).optional(),
+});
+
+router.get('/stats/summary', roleMiddleware(['Admin']), async (_req: any, res) => {
+  try {
+    const result = await userService.getStats();
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
 });
 
 router.delete('/:id', roleMiddleware(['Admin']), async (req: any, res) => {

@@ -26,22 +26,27 @@ export class GradeService {
     }
 
     const resultIds = subjectResults.map((r) => r.result_id);
-    const studentIdSet = new Set(subjectResults.map((r) => r.student_id));
+    const resultToStudent = new Map<number, number>();
+    subjectResults.forEach((r) => resultToStudent.set(r.result_id, r.student_id));
 
     const { data: gradeItems } = await supabase
       .from('grade_items')
       .select('result_id, score, grade_type_id, grade_types(type_id, type_name)')
       .in('result_id', resultIds);
 
-    const filteredStudents = (students ?? []).filter((s: any) => studentIdSet.has(s.student_id));
+    const presentStudentIds = new Set(subjectResults.map((r) => r.student_id));
+    const filteredStudents = (students ?? []).filter((s: any) =>
+      presentStudentIds.has(s.student_id)
+    );
 
     const gradesByStudent = new Map<number, any[]>();
     (gradeItems || []).forEach((g: any) => {
-      const sid = (g as any).result_id;
-      if (!gradesByStudent.has(sid)) gradesByStudent.set(sid, []);
-      gradesByStudent.get(sid)!.push({
-        grade_type_name: (g as any).grade_types?.type_name || '',
-        score: (g as any).score,
+      const studentId = resultToStudent.get(g.result_id);
+      if (studentId == null) return;
+      if (!gradesByStudent.has(studentId)) gradesByStudent.set(studentId, []);
+      gradesByStudent.get(studentId)!.push({
+        grade_type_name: g.grade_types?.type_name || '',
+        score: g.score,
       });
     });
 
@@ -84,7 +89,7 @@ export class GradeService {
     const results: any[] = [];
     for (const u of updates) {
       const r = await this.updateGrade(u.gradeItemId, u.score);
-      results.push(r);
+      results.push(r as any);
     }
 
     const failed = results.filter((r) => !(r as any).success);
