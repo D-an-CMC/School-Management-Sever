@@ -1,4 +1,4 @@
-﻿import { supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
@@ -126,6 +126,66 @@ export class ClassService {
 
  return success(result);
  }
+
+  async update(classId: number, data: { homeroom_teacher_id?: number | null; class_name?: string; grade_level?: number }) {
+    const updateData: any = {};
+    if ('homeroom_teacher_id' in data) updateData.homeroom_teacher_id = data.homeroom_teacher_id;
+    if ('class_name' in data) updateData.class_name = data.class_name;
+    if ('grade_level' in data) updateData.grade_level = data.grade_level;
+
+    const { data: updated, error: dbError } = await supabase
+      .from('classes')
+      .update(updateData)
+      .eq('class_id', classId)
+      .select('*')
+      .single();
+
+    if (dbError) {
+      return error(dbError.message, 'DB_ERROR');
+    }
+
+    return success(updated);
+  }
+
+  async addStudent(classId: number, studentData: { full_name?: string; student_code?: string; gender?: string; date_of_birth?: string; student_id?: number }) {
+    if (studentData.student_id) {
+      const { data: updated, error: dbError } = await supabase
+        .from('students')
+        .update({ class_id: classId })
+        .eq('student_id', studentData.student_id)
+        .select('*')
+        .single();
+      if (dbError) return error(dbError.message, 'DB_ERROR');
+      return success(updated);
+    }
+
+    const { data: created, error: dbError } = await supabase
+      .from('students')
+      .insert({
+        class_id: classId,
+        full_name: studentData.full_name,
+        student_code: studentData.student_code,
+        gender: studentData.gender,
+        date_of_birth: studentData.date_of_birth || null,
+      })
+      .select('*')
+      .single();
+
+    if (dbError) return error(dbError.message, 'DB_ERROR');
+    return success(created);
+  }
+
+  async removeStudent(classId: number, studentId: number) {
+    const { data: updated, error: dbError } = await supabase
+      .from('students')
+      .update({ class_id: null })
+      .eq('student_id', studentId)
+      .select('*')
+      .single();
+
+    if (dbError) return error(dbError.message, 'DB_ERROR');
+    return success(updated);
+  }
 }
 
 export const classService = new ClassService();

@@ -55,4 +55,16 @@ router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res
   }
 });
 
+router.post('/class/:classId/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+  try {
+    const classId = Number(req.params.classId);
+    const { grades } = req.body;
+    const result = await gradeService.saveClassGrades(classId, grades);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 export default router;

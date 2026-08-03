@@ -54,4 +54,35 @@ router.get('/stats/by-grade', roleMiddleware(['Admin']), async (req: any, res) =
   }
 });
 
+router.put('/:id', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const result = await classService.update(Number(req.params.id), req.body);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/:id/students', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+  try {
+    const result = await classService.addStudent(Number(req.params.id), req.body);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/:id/students/:studentId', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+  try {
+    const result = await classService.removeStudent(Number(req.params.id), Number(req.params.studentId));
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
+

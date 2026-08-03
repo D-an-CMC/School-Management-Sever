@@ -20,7 +20,9 @@ export class GradeService {
           student_id: s.student_id,
           student_code: s.student_code,
           full_name: s.full_name,
-          grades: [],
+          freq: [],
+          midTerm: '',
+          finalTerm: '',
         }))
       );
     }
@@ -34,27 +36,33 @@ export class GradeService {
       .select('result_id, score, grade_type_id, grade_types(type_id, type_name)')
       .in('result_id', resultIds);
 
-    const presentStudentIds = new Set(subjectResults.map((r) => r.student_id));
-    const filteredStudents = (students ?? []).filter((s: any) =>
-      presentStudentIds.has(s.student_id)
-    );
+    const freqByStudent = new Map<number, string[]>();
+    const midByStudent = new Map<number, string>();
+    const finalByStudent = new Map<number, string>();
 
-    const gradesByStudent = new Map<number, any[]>();
     (gradeItems || []).forEach((g: any) => {
       const studentId = resultToStudent.get(g.result_id);
       if (studentId == null) return;
-      if (!gradesByStudent.has(studentId)) gradesByStudent.set(studentId, []);
-      gradesByStudent.get(studentId)!.push({
-        grade_type_name: g.grade_types?.type_name || '',
-        score: g.score,
-      });
+      const typeName = (g.grade_types?.type_name || '').toLowerCase();
+      const scoreStr = String(g.score);
+
+      if (typeName.includes('giữa') || typeName.includes('mid')) {
+        midByStudent.set(studentId, scoreStr);
+      } else if (typeName.includes('cuối') || typeName.includes('final')) {
+        finalByStudent.set(studentId, scoreStr);
+      } else {
+        if (!freqByStudent.has(studentId)) freqByStudent.set(studentId, []);
+        freqByStudent.get(studentId)!.push(scoreStr);
+      }
     });
 
-    const rows = filteredStudents.map((s: any) => ({
+    const rows = (students ?? []).map((s: any) => ({
       student_id: s.student_id,
       student_code: s.student_code,
       full_name: s.full_name,
-      grades: gradesByStudent.get(s.student_id) || [],
+      freq: freqByStudent.get(s.student_id) || [],
+      midTerm: midByStudent.get(s.student_id) || '',
+      finalTerm: finalByStudent.get(s.student_id) || '',
     }));
 
     return success(rows);
@@ -99,6 +107,86 @@ export class GradeService {
 
     return success(results);
   }
+
+  async saveClassGrades(classId: number, studentGrades: any[]) {
+    const { data: gTypes } = await supabase.from('grade_types').select('*');
+    let freqTypeId = 1;
+    let midTypeId = 2;
+    let finalTypeId = 3;
+
+    if (gTypes && gTypes.length > 0) {
+      const fType = gTypes.find((t: any) =>
+        (t.type_name || '').toLowerCase().includes('thường xuyên') ||
+        (t.type_name || '').toLowerCase().includes('15') ||
+        (t.type_name || '').toLowerCase().includes('miệng')
+      ) || gTypes[0];
+      const mType = gTypes.find((t: any) =>
+        (t.type_name || '').toLowerCase().includes('giữa') ||
+        (t.type_name || '').toLowerCase().includes('1 tiết')
+      ) || gTypes[1] || gTypes[0];
+      const fnType = gTypes.find((t: any) =>
+        (t.type_name || '').toLowerCase().includes('cuối') ||
+        (t.type_name || '').toLowerCase().includes('học kỳ')
+      ) || gTypes[2] || gTypes[0];
+
+      if (fType) freqTypeId = fType.grade_type_id || fType.type_id || 1;
+      if (mType) midTypeId = mType.grade_type_id || mType.type_id || 2;
+      if (fnType) finalTypeId = fnType.grade_type_id || fnType.type_id || 3;
+    }
+
+    for (const sg of studentGrades) {
+      const studentId = Number(sg.student_id);
+      if (!studentId) continue;
+
+      let { data: sr } = await supabase
+        .from('subject_results')
+        .select('result_id')
+        .eq('student_id', studentId)
+        .eq('class_id', classId)
+        .maybeSingle();
+
+      if (!sr) {
+        const { data: newSr, error: srError } = await supabase
+          .from('subject_results')
+          .insert({ student_id: studentId, class_id: classId })
+          .select('result_id')
+          .single();
+        if (srError || !newSr) continue;
+        sr = newSr;
+      }
+
+      const resultId = sr.result_id;
+
+      await supabase.from('grade_items').delete().eq('result_id', resultId);
+
+      const itemsToInsert: any[] = [];
+      if (Array.isArray(sg.freq)) {
+        for (const fVal of sg.freq) {
+          const num = parseFloat(String(fVal));
+          if (!isNaN(num)) {
+            itemsToInsert.push({ result_id: resultId, grade_type_id: freqTypeId, score: num });
+          }
+        }
+      }
+
+      const midNum = parseFloat(String(sg.midTerm));
+      if (!isNaN(midNum)) {
+        itemsToInsert.push({ result_id: resultId, grade_type_id: midTypeId, score: midNum });
+      }
+
+      const finalNum = parseFloat(String(sg.finalTerm));
+      if (!isNaN(finalNum)) {
+        itemsToInsert.push({ result_id: resultId, grade_type_id: finalTypeId, score: finalNum });
+      }
+
+      if (itemsToInsert.length > 0) {
+        await supabase.from('grade_items').insert(itemsToInsert);
+      }
+    }
+
+    return success(true);
+  }
 }
 
 export const gradeService = new GradeService();
+

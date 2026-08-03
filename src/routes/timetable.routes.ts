@@ -99,4 +99,54 @@ router.get('/semesters', async (_req, res) => {
   return res.json(result);
 });
 
+// GET /timetables/my — returns the authenticated user's own timetable
+router.get('/my', async (req: any, res) => {
+  try {
+    const user = req.user as any;
+    const q: any = { semesterId: undefined, page: 1, limit: 200 };
+
+    if (user.role === 'GiaoVien') {
+      const { data: teacher } = await supabase
+        .from('teachers')
+        .select('teacher_id')
+        .eq('user_id', user.userId)
+        .maybeSingle();
+      if (!teacher?.teacher_id) {
+        return res.json({ success: true, data: [] });
+      }
+      q.teacherId = teacher.teacher_id;
+    } else if (user.role === 'HocSinh-PhuHuynh') {
+      const { data: student } = await supabase
+        .from('students')
+        .select('class_id, classes(class_name)')
+        .eq('user_id', user.userId)
+        .maybeSingle();
+      if (!student?.class_id) {
+        return res.json({ success: true, data: [], className: null });
+      }
+      q.classId = student.class_id;
+      const result = await timetableService.findMany(q);
+      return res.json({ ...(result), className: (student as any).classes?.class_name ?? null });
+    }
+
+    const result = await timetableService.findMany(q);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/bulk', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const { entries } = req.body;
+    const result = await timetableService.bulkCreate(entries || []);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 export default router;
+
