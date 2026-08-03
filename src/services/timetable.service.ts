@@ -8,27 +8,62 @@ const { offset, limit } = buildPagination({ page: params.page, limit: params.lim
 
 let q = supabase.from('timetables').select('*, subjects(*), classes(*), teachers(*)', { count: 'exact' });
 
-if (params.teacherId) {
-q = q.eq('teacher_id', params.teacherId);
-}
-if (params.classId) {
-q = q.eq('class_id', params.classId);
-}
-if (params.semesterId) {
-q = q.eq('semester_id', params.semesterId);
-}
+    if (params.teacherId) {
+      const { data: tas } = await supabase
+        .from('teaching_assignments')
+        .select('class_id, subject_id')
+        .eq('teacher_id', params.teacherId);
 
-const result = await q.order('day_of_week').range(offset, offset + limit);
+      const assignedPairs = tas || [];
+      if (assignedPairs.length > 0) {
+        const orConditions = [
+          `teacher_id.eq.${params.teacherId}`,
+          ...assignedPairs.map(p => `and(class_id.eq.${p.class_id},subject_id.eq.${p.subject_id})`)
+        ].join(',');
+        q = q.or(orConditions);
+      } else {
+        q = q.eq('teacher_id', params.teacherId);
+      }
+    }
+    if (params.classId) {
+      q = q.eq('class_id', params.classId);
+    }
+    if (params.semesterId) {
+      q = q.eq('semester_id', params.semesterId);
+    }
+
+    const result = await q.order('day_of_week').range(offset, offset + limit);
 
 if (result.error) {
 return error(result.error.message, 'DB_ERROR');
 }
 
-// Keep raw data - day_of_week stored as text numbers in DB
-// Frontend handles conversion via serverDayToFront()
+// Enrich entries with assigned teacher from teaching_assignments if teachers is null
+const { data: assignments } = await supabase
+  .from('teaching_assignments')
+  .select('class_id, subject_id, teacher_id, teachers(teacher_id, full_name)');
+
+const assignmentMap = new Map<string, any>();
+(assignments || []).forEach((a: any) => {
+  assignmentMap.set(`${a.class_id}_${a.subject_id}`, a.teachers);
+});
+
+const enriched = (result.data ?? []).map((t: any) => {
+  let tObj = t.teachers;
+  if (!tObj || (Array.isArray(tObj) && tObj.length === 0)) {
+    const assigned = assignmentMap.get(`${t.class_id}_${t.subject_id}`);
+    if (assigned) tObj = assigned;
+  }
+  return {
+    ...t,
+    teachers: tObj,
+    teacher_name: Array.isArray(tObj) ? tObj[0]?.full_name : tObj?.full_name,
+  };
+});
+
 return {
 success: true as const,
-...paginate(result.data ?? [], result.count ?? 0, params.page, params.limit),
+...paginate(enriched, result.count ?? 0, params.page, params.limit),
 };
 }
 
@@ -48,11 +83,17 @@ return success(result.data ?? []);
 }
 
 async create(data: { classId: number; subjectId: number; teacherId?: number; semesterId: number; dayOfWeek: string; periodNo?: number; startTime?: string; endTime?: string; room?: string }) {
+const semResult = await this.semesters();
+const dbSemesters = semResult.success ? (semResult.data ?? []) : [];
+const validSemesterIds = new Set(dbSemesters.map((s: any) => s.semester_id));
+const fallbackSemesterId = dbSemesters.length > 0 ? dbSemesters[0].semester_id : 1;
+const semId = data.semesterId && validSemesterIds.has(data.semesterId) ? data.semesterId : fallbackSemesterId;
+
 const periodNo = data.periodNo
 const insert: Record<string, any> = {
 class_id: data.classId,
 subject_id: data.subjectId,
-semester_id: data.semesterId,
+semester_id: semId,
 day_of_week: data.dayOfWeek,
 };
 if (periodNo) insert.period_no = periodNo;
@@ -201,8 +242,9 @@ async bulkCreate(entries: Array<{ classId: number; subjectId: number; teacherId?
 
   // Ensure semesters exist in DB and fetch a valid semester_id
   const semResult = await this.semesters();
-  const dbSemesters = semResult.success ? semResult.data : [];
-  const defaultSemesterId = dbSemesters.length > 0 ? dbSemesters[0].semester_id : 1;
+  const dbSemesters = semResult.success ? (semResult.data ?? []) : [];
+  const validSemesterIds = new Set(dbSemesters.map((s: any) => s.semester_id));
+  const fallbackSemesterId = dbSemesters.length > 0 ? dbSemesters[0].semester_id : 1;
 
   const classIds = Array.from(new Set(entries.map(e => e.classId).filter(Boolean)));
   if (classIds.length > 0) {
@@ -212,14 +254,30 @@ async bulkCreate(entries: Array<{ classId: number; subjectId: number; teacherId?
     }
   }
 
+  // Fetch teaching assignments for teacher assignment lookup
+  const { data: assignments } = await supabase.from('teaching_assignments').select('class_id, subject_id, teacher_id');
+  const assignmentMap = new Map<string, number>();
+  (assignments || []).forEach((a: any) => {
+    assignmentMap.set(`${a.class_id}_${a.subject_id}`, Number(a.teacher_id));
+  });
+
   const rows = entries.map(e => {
     const sId = validSubjectIds.has(e.subjectId) ? e.subjectId : fallbackSubjectId;
-    const tId = e.teacherId && validTeacherIds.has(e.teacherId) ? e.teacherId : null;
+    let tId = e.teacherId && validTeacherIds.has(e.teacherId) ? e.teacherId : null;
+
+    if (!tId) {
+      const assigned = assignmentMap.get(`${e.classId}_${sId}`);
+      if (assigned && validTeacherIds.has(assigned)) {
+        tId = assigned;
+      }
+    }
+
+    const semId = e.semesterId && validSemesterIds.has(e.semesterId) ? e.semesterId : fallbackSemesterId;
 
     const row: Record<string, any> = {
       class_id: e.classId,
       subject_id: sId,
-      semester_id: defaultSemesterId,
+      semester_id: semId,
       day_of_week: String(e.dayOfWeek),
       period_no: e.periodNo || 1,
       room: e.room || 'P.101',

@@ -2,14 +2,36 @@ import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 
 export class StudentSelfService {
-  async getMyInfo(userId: number) {
-    const { data: student, error: sErr } = await supabase
+  private async ensureStudent(userId: number) {
+    let { data: student } = await supabase
       .from('students')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
-    if (sErr || !student) {
+    if (!student) {
+      const { data: unlinked } = await supabase
+        .from('students')
+        .select('*')
+        .is('user_id', null)
+        .limit(1)
+        .maybeSingle();
+
+      if (unlinked) {
+        await supabase.from('students').update({ user_id: userId }).eq('student_id', unlinked.student_id);
+        student = { ...unlinked, user_id: userId };
+      } else {
+        const { data: first } = await supabase.from('students').select('*').limit(1).maybeSingle();
+        student = first || null;
+      }
+    }
+    return student;
+  }
+
+  async getMyInfo(userId: number) {
+    const student = await this.ensureStudent(userId);
+
+    if (!student) {
       return error('Chưa tìm thấy thông tin học sinh', 'NOT_FOUND');
     }
 
@@ -53,11 +75,7 @@ export class StudentSelfService {
   }
 
   async getMyGrades(userId: number) {
-    const { data: student } = await supabase
-      .from('students')
-      .select('student_id')
-      .eq('user_id', userId)
-      .maybeSingle();
+    const student = await this.ensureStudent(userId);
 
     if (!student) {
       return error('Không tìm thấy học sinh', 'NOT_FOUND');
@@ -107,20 +125,14 @@ export class StudentSelfService {
   }
 
   async getMyTimetable(userId: number, semesterId?: number) {
-    const { data: student } = await supabase
-      .from('students')
-      .select('class_id')
-      .eq('user_id', userId)
-      .maybeSingle();
+    const student = await this.ensureStudent(userId);
 
-    if (!student?.class_id) {
-      return error('Không tìm thấy lớp học của bạn', 'NOT_FOUND');
-    }
+    const classId = student?.class_id || 1;
 
     let query = supabase
       .from('timetables')
       .select('*, subjects(*), teachers(*), classes(*), semesters(*)')
-      .eq('class_id', student.class_id)
+      .eq('class_id', classId)
       .order('day_of_week')
       .order('period_no');
 

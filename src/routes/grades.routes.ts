@@ -10,7 +10,9 @@ router.use(authMiddleware);
 router.get('/class/:classId', roleMiddleware(['Admin', 'GiaoVien', 'HocSinh-PhuHuynh']), async (req: any, res) => {
   try {
     const classId = Number(req.params.classId);
-    const result = await gradeService.findByClass(classId);
+    const subjectId = req.query.subjectId ? Number(req.query.subjectId) : undefined;
+    const semesterId = req.query.semesterId ? Number(req.query.semesterId) : undefined;
+    const result = await gradeService.findByClass(classId, subjectId, semesterId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {
@@ -58,8 +60,9 @@ router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res
 router.post('/class/:classId/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
     const classId = Number(req.params.classId);
-    const { grades } = req.body;
-    const result = await gradeService.saveClassGrades(classId, grades);
+    const { grades, subjectId, subject_id, semesterId } = req.body;
+    const sId = subjectId || subject_id;
+    const result = await gradeService.saveClassGrades(classId, grades, sId, semesterId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {

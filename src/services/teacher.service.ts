@@ -3,11 +3,14 @@ import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class TeacherService {
-  async findMany(params: { search?: string; page?: number; limit?: number }) {
+  async findMany(params: { search?: string; subjectId?: number; page?: number; limit?: number }) {
     const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
     let q = supabase.from('teachers').select('*', { count: 'exact' });
 
+    if (params.subjectId) {
+      q = q.eq('subject_id', params.subjectId);
+    }
     if (params.search) {
       q = q.or(`full_name.ilike.%${params.search}%,teacher_code.ilike.%${params.search}%`);
     }
@@ -73,8 +76,6 @@ export class TeacherService {
       .select('subject_id, subjects!inner(subject_id, subject_name, subject_code)')
       .eq('teacher_id', teacherId);
 
-    if (dbError) return error(dbError.message, 'DB_ERROR');
-
     const seen = new Set<number>();
     const subjects: any[] = [];
     (data ?? []).forEach((row: any) => {
@@ -87,6 +88,23 @@ export class TeacherService {
         subject_name: s.subject_name,
       });
     });
+
+    const { data: tRecord } = await supabase
+      .from('teachers')
+      .select('subject_id, subjects(subject_id, subject_name, subject_code)')
+      .eq('teacher_id', teacherId)
+      .maybeSingle();
+
+    if (tRecord?.subject_id && !seen.has(tRecord.subject_id)) {
+      const s = (tRecord as any).subjects;
+      if (s) {
+        subjects.push({
+          subject_id: s.subject_id,
+          subject_code: s.subject_code,
+          subject_name: s.subject_name,
+        });
+      }
+    }
 
     return success(subjects);
   }

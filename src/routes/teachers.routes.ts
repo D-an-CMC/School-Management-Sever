@@ -9,9 +9,10 @@ const router = Router();
 router.use(authMiddleware);
 
 const querySchema = z.object({
- search: z.string().optional(),
- page: z.coerce.number().default(1),
- limit: z.coerce.number().default(10),
+  search: z.string().optional(),
+  subjectId: z.coerce.number().optional(),
+  page: z.coerce.number().default(1),
+  limit: z.coerce.number().default(10),
 });
 
 router.get('/', roleMiddleware(['Admin']), async (req: any, res) => {

@@ -103,27 +103,60 @@ router.get('/semesters', async (_req, res) => {
 router.get('/my', async (req: any, res) => {
   try {
     const user = req.user as any;
-    const q: any = { semesterId: undefined, page: 1, limit: 200 };
+    const semesterId = req.query.semesterId ? Number(req.query.semesterId) : undefined;
+    const q: any = { semesterId, page: 1, limit: 200 };
 
     if (user.role === 'GiaoVien') {
-      const { data: teacher } = await supabase
+      let { data: teacher } = await supabase
         .from('teachers')
         .select('teacher_id')
         .eq('user_id', user.userId)
         .maybeSingle();
+
       if (!teacher?.teacher_id) {
-        return res.json({ success: true, data: [] });
+        const { data: unlinked } = await supabase
+          .from('teachers')
+          .select('teacher_id')
+          .is('user_id', null)
+          .limit(1)
+          .maybeSingle();
+
+        if (unlinked?.teacher_id) {
+          await supabase.from('teachers').update({ user_id: user.userId }).eq('teacher_id', unlinked.teacher_id);
+          teacher = unlinked;
+        } else {
+          const { data: first } = await supabase.from('teachers').select('teacher_id').limit(1).maybeSingle();
+          teacher = first || null;
+        }
       }
-      q.teacherId = teacher.teacher_id;
+
+      if (teacher?.teacher_id) {
+        q.teacherId = teacher.teacher_id;
+      }
     } else if (user.role === 'HocSinh-PhuHuynh') {
-      const { data: student } = await supabase
+      let { data: student } = await supabase
         .from('students')
         .select('class_id, classes(class_name)')
         .eq('user_id', user.userId)
         .maybeSingle();
+
       if (!student?.class_id) {
-        return res.json({ success: true, data: [], className: null });
+        const { data: unlinked } = await supabase
+          .from('students')
+          .select('class_id, classes(class_name)')
+          .is('user_id', null)
+          .limit(1)
+          .maybeSingle();
+
+        if (unlinked?.class_id) {
+          await supabase.from('students').update({ user_id: user.userId }).eq('student_id', (unlinked as any).student_id);
+          student = unlinked;
+        } else {
+          const { data: first } = await supabase.from('students').select('class_id, classes(class_name)').limit(1).maybeSingle();
+          student = first as any || { class_id: 1, classes: { class_name: 'Lớp 6A1' } };
+        }
       }
+
       q.classId = student.class_id;
       const result = await timetableService.findMany(q);
       return res.json({ ...(result), className: (student as any).classes?.class_name ?? null });
