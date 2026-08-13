@@ -1,0 +1,74 @@
+[
+  {
+    "semester_id": 11,
+    "school_year_id": 6,
+    "semester_name": "Học Kỳ 1",
+    "term_order": 1,
+    "start_date": "2026-09-05",
+    "end_date": "2027-01-08",
+    "is_active": false
+  },
+  {
+    "semester_id": 12,
+    "school_year_id": 6,
+    "semester_name": "Học kỳ 2",
+    "term_order": 2,
+    "start_date": "2027-01-09",
+    "end_date": "2027-05-30",
+    "is_active": false
+  },
+  {
+    "semester_id": 13,
+    "school_year_id": 7,
+    "semester_name": "Học kỳ I",
+    "term_order": 1,
+    "start_date": "2023-09-05",
+    "end_date": "2024-01-15",
+    "is_active": false
+  },
+  {
+    "semester_id": 14,
+    "school_year_id": 7,
+    "semester_name": "Học kỳ II",
+    "term_order": 2,
+    "start_date": "2024-01-16",
+    "end_date": "2024-05-31",
+    "is_active": false
+  },
+  {
+    "semester_id": 15,
+    "school_year_id": 8,
+    "semester_name": "Học kỳ I",
+    "term_order": 1,
+    "start_date": "2024-09-05",
+    "end_date": "2025-01-15",
+    "is_active": false
+  },
+  {
+    "semester_id": 16,
+    "school_year_id": 8,
+    "semester_name": "Học kỳ II",
+    "term_order": 2,
+    "start_date": "2025-01-16",
+    "end_date": "2025-05-31",
+    "is_active": false
+  },
+  {
+    "semester_id": 17,
+    "school_year_id": 9,
+    "semester_name": "Học kỳ I",
+    "term_order": 1,
+    "start_date": "2025-09-05",
+    "end_date": "2026-01-15",
+    "is_active": false
+  },
+  {
+    "semester_id": 18,
+    "school_year_id": 9,
+    "semester_name": "Học kỳ II",
+    "term_order": 2,
+    "start_date": "2026-01-16",
+    "end_date": "2026-05-31",
+    "is_active": false
+  }
+]

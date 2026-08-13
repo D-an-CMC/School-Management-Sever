@@ -19,7 +19,14 @@ router.get('/my-info', authMiddleware, roleMiddleware(['HocSinh-PhuHuynh']), asy
 router.get('/my-grades', authMiddleware, roleMiddleware(['HocSinh-PhuHuynh']), async (req: any, res) => {
   try {
     const userId = (req.user as any).userId as number;
-    const result = await studentSelfService.getMyGrades(userId);
+    const semesterId = req.query.semesterId ? Number(req.query.semesterId) : undefined;
+    const mode = req.query.mode ? String(req.query.mode) : undefined;
+    if (mode === 'year' || mode === 'ca-nam' || mode === 'cả-năm') {
+      const result = await studentSelfService.getMyGradesYear(userId);
+      if (!result.success) return res.status(400).json(result);
+      return res.json(result);
+    }
+    const result = await studentSelfService.getMyGrades(userId, semesterId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {

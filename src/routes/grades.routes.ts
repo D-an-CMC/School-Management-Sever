@@ -12,7 +12,8 @@ router.get('/class/:classId', roleMiddleware(['Admin', 'GiaoVien', 'HocSinh-PhuH
     const classId = Number(req.params.classId);
     const subjectId = req.query.subjectId ? Number(req.query.subjectId) : undefined;
     const semesterId = req.query.semesterId ? Number(req.query.semesterId) : undefined;
-    const result = await gradeService.findByClass(classId, subjectId, semesterId);
+    const mode = req.query.mode ? String(req.query.mode) : undefined;
+    const result = await gradeService.findByClass(classId, subjectId, semesterId, mode);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {

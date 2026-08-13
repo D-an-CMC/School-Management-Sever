@@ -9,6 +9,7 @@ router.use(authMiddleware);
 
 const querySchema = z.object({
   teacherId: z.coerce.number().optional(),
+  schoolYearId: z.coerce.number().optional(),
   page: z.coerce.number().default(1),
   limit: z.coerce.number().default(20),
 });
@@ -46,11 +47,22 @@ router.get('/:id/students', async (req: any, res) => {
 
 router.get('/stats/by-grade', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
-    const result = await classService.getGradeStats();
+    const schoolYearId = req.query.schoolYearId ? Number(req.query.schoolYearId) : undefined;
+    const result = await classService.getGradeStats(schoolYearId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const result = await classService.create(req.body);
+    if (!result.success) return res.status(400).json(result);
+    return res.status(201).json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
   }
 });
 
@@ -77,6 +89,16 @@ router.post('/:id/students', roleMiddleware(['Admin', 'GiaoVien']), async (req: 
 router.delete('/:id/students/:studentId', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
     const result = await classService.removeStudent(Number(req.params.id), Number(req.params.studentId));
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.delete('/:id', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const result = await classService.remove(Number(req.params.id));
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {

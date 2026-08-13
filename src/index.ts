@@ -18,3 +18,10 @@ app.use(errorMiddleware);
 app.listen(env.PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${env.PORT}`);
 });
+
+process.on('SIGINT', () => {
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  process.exit(0);
+});

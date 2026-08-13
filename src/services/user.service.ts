@@ -195,19 +195,37 @@ export class UserService {
     const userId = newUser.user_id;
 
     if (input.role === 'HocSinh-PhuHuynh') {
-      const { error: studentError } = await supabase.from('students').insert({
+      const { data: newStudent, error: studentError } = await supabase.from('students').insert({
         user_id: userId,
         full_name: input.full_name || input.username || input.email,
         gender: input.gender || null,
         date_of_birth: input.date_of_birth || null,
         class_id: input.class_id || null,
         student_code: studentCode || null,
-      });
+      }).select('*').single();
 
       if (studentError) {
         await supabase.from('users').delete().eq('user_id', userId);
         await supabase.auth.admin.deleteUser(authData.user.id);
         return errResp(studentError.message, 'CREATE_STUDENT_FAILED');
+      }
+
+      // Lưu lịch sử phân lớp theo năm học.
+      if (newStudent && input.class_id) {
+        let yearId = input.school_year_id;
+        let gradeLevel: number | null = null;
+        const classQuery = await supabase.from('classes').select('school_year_id, grade_level').eq('class_id', input.class_id).maybeSingle();
+        if (!yearId) yearId = classQuery.data?.school_year_id;
+        gradeLevel = classQuery.data?.grade_level ?? null;
+        if (yearId) {
+          await supabase.from('student_class_enrollments').insert({
+            student_id: newStudent.student_id,
+            class_id: input.class_id,
+            school_year_id: yearId,
+            grade_level: gradeLevel,
+            status: 'ACTIVE',
+          });
+        }
       }
     }
 
@@ -279,6 +297,34 @@ export class UserService {
     if (patch.parent_phone !== undefined) studentData.parent_phone = patch.parent_phone;
       const { error: studentError } = await supabase.from("students").update(studentData).eq("user_id", userId);
       if (studentError) return errResp(studentError.message, "UPDATE_STUDENT_FAILED");
+
+      // Nếu đổi lớp, lưu lại lịch sử phân lớp theo năm của lớp đó.
+      if (patch.class_id !== undefined) {
+        const { data: stu } = await supabase.from('students').select('student_id').eq('user_id', userId).maybeSingle();
+        if (stu?.student_id && patch.class_id) {
+          const clsQ = await supabase.from('classes').select('school_year_id, grade_level').eq('class_id', patch.class_id).maybeSingle();
+          if (clsQ.data?.school_year_id) {
+            const payload = {
+              student_id: stu.student_id,
+              class_id: patch.class_id,
+              school_year_id: clsQ.data.school_year_id,
+              grade_level: clsQ.data.grade_level ?? null,
+              status: 'ACTIVE',
+            };
+            const existing = await supabase
+              .from('student_class_enrollments')
+              .select('enrollment_id')
+              .eq('student_id', stu.student_id)
+              .eq('school_year_id', clsQ.data.school_year_id)
+              .maybeSingle();
+            if (existing.data) {
+              await supabase.from('student_class_enrollments').update(payload).eq('enrollment_id', existing.data.enrollment_id);
+            } else {
+              await supabase.from('student_class_enrollments').insert(payload);
+            }
+          }
+        }
+      }
     }
 
     if (patch.full_name !== undefined || patch.gender !== undefined || patch.date_of_birth !== undefined || patch.phone !== undefined || patch.teacher_code !== undefined || patch.department !== undefined || patch.title !== undefined || patch.schedule_slot !== undefined) {

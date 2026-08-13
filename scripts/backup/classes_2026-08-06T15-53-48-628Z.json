@@ -1,0 +1,362 @@
+[
+  {
+    "class_id": 57,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "6A",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 58,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "6B",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 59,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "6C",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 60,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "7A",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 61,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "7B",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 62,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "7C",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 63,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "8A",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 64,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "8B",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 65,
+    "homeroom_teacher_id": null,
+    "school_year_id": 7,
+    "class_name": "8C",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 66,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "6A",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 67,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "6B",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 68,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "6C",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 69,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "7A",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 70,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "7B",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 71,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "7C",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 72,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "8A",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 73,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "8B",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 74,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "8C",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 75,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "9A",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 76,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "9B",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 77,
+    "homeroom_teacher_id": null,
+    "school_year_id": 8,
+    "class_name": "9C",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 78,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "6A",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 79,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "6B",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 80,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "6C",
+    "grade_level": 6,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 81,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "7A",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 82,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "7B",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 83,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "7C",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 84,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "8A",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 85,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "8B",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 86,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "8C",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 87,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "9A",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 88,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "9B",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 89,
+    "homeroom_teacher_id": null,
+    "school_year_id": 9,
+    "class_name": "9C",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 41,
+    "homeroom_teacher_id": 12,
+    "school_year_id": 6,
+    "class_name": "6B",
+    "grade_level": 6,
+    "fixed_room_id": 8
+  },
+  {
+    "class_id": 44,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "7B",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 45,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "7C",
+    "grade_level": 7,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 46,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "8A",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 47,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "8B",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 48,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "8C",
+    "grade_level": 8,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 49,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "9A",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 50,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "9B",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 51,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "9C",
+    "grade_level": 9,
+    "fixed_room_id": null
+  },
+  {
+    "class_id": 42,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "6C",
+    "grade_level": 6,
+    "fixed_room_id": 9
+  },
+  {
+    "class_id": 43,
+    "homeroom_teacher_id": null,
+    "school_year_id": 6,
+    "class_name": "7A",
+    "grade_level": 7,
+    "fixed_room_id": 10
+  },
+  {
+    "class_id": 40,
+    "homeroom_teacher_id": 14,
+    "school_year_id": 6,
+    "class_name": "6A",
+    "grade_level": 6,
+    "fixed_room_id": 1
+  }
+]

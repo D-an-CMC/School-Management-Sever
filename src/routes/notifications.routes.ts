@@ -15,7 +15,17 @@ const querySchema = z.object({
 router.get('/my', async (req: any, res) => {
   try {
     const q = querySchema.parse(req.query);
-    const result = await notificationService.findByUser(req.user!.userId, q);
+    const result = await notificationService.findByUser(req.user!.userId, req.user!.role, q);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
+  }
+});
+
+router.get('/unread-count', async (req: any, res) => {
+  try {
+    const result = await notificationService.unreadCount(req.user!.userId, req.user!.role);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
   } catch (err: any) {
@@ -36,8 +46,12 @@ router.put('/:id/read', async (req: any, res) => {
 router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const input = z
-      .object({ title: z.string(), content: z.string().optional(), targetType: z.string().optional() })
-      .parse(req.body) as any;
+      .object({
+        title: z.string().min(1, 'Tiêu đề không được để trống'),
+        content: z.string().optional(),
+        targetType: z.enum(['all', 'admin', 'teacher', 'student', 'parent', 'medical', 'accountant']).default('all'),
+      })
+      .parse(req.body) as { title: string; content?: string; targetType: string };
     const result = await notificationService.create({ ...input, senderId: req.user!.userId });
     if (!result.success) return res.status(400).json(result);
     return res.status(201).json(result);

@@ -74,20 +74,30 @@ export class StudentSelfService {
     return success({ ...student, class_info: classInfo, user: user ?? {} });
   }
 
-  async getMyGrades(userId: number) {
+  async getMyGrades(userId: number, semesterId?: number) {
     const student = await this.ensureStudent(userId);
 
     if (!student) {
       return error('Không tìm thấy học sinh', 'NOT_FOUND');
     }
 
-    const { data: results, error: rErr } = await supabase
+    let query = supabase
       .from('subject_results')
       .select('*, subjects(*), semesters(*)')
-      .eq('student_id', student.student_id)
-      .order('semester_id', { ascending: false });
+      .eq('student_id', student.student_id);
+
+    if (semesterId) {
+      query = query.eq('semester_id', semesterId);
+    }
+
+    const { data: results, error: rErr } = await query.order('semester_id', { ascending: false });
 
     if (rErr) return error(rErr.message, 'DB_ERROR');
+
+    const { data: allSubjects } = await supabase
+      .from('subjects')
+      .select('subject_id, subject_name, subject_code')
+      .order('subject_id');
 
     const enriched = await Promise.all((results || []).map(async (r: any) => {
       const { data: items } = await supabase
@@ -121,7 +131,172 @@ export class StudentSelfService {
       };
     }));
 
-    return success(enriched);
+    // Ensure every subject is present, even when no result was entered yet.
+    const bySubject = new Map<number, any>();
+    (enriched || []).forEach((e: any) => bySubject.set(Number(e.subject_id), e));
+
+    const merged = (allSubjects || []).map((s: any) => {
+      const existing = bySubject.get(Number(s.subject_id));
+      if (existing) return existing;
+      return {
+        result_id: null,
+        subject_id: s.subject_id,
+        semester_id: semesterId ?? null,
+        subject_name: s.subject_name,
+        subject_code: s.subject_code,
+        semester_name: null,
+        dtb_mhk: null,
+        dtb_mcn: null,
+        reassess_dtb_mhk: null,
+        reassess_dtb_mcn: null,
+        ranking: '',
+        teacher_comment: '',
+        grade_items: [],
+      };
+    });
+
+    return success(merged);
+  }
+
+  // Điểm cả năm của học sinh: gộp HK1 + HK2 theo từng môn.
+  // TBM môn CN = (TBM HK1 + 2*TBM HK2) / 3; môn không-điểm dùng ranking (ưu tiên HK2).
+  async getMyGradesYear(userId: number) {
+    const student = await this.ensureStudent(userId);
+    if (!student) {
+      return error('Không tìm thấy học sinh', 'NOT_FOUND');
+    }
+
+    // Hai học kỳ của năm học hiện tại (theo class -> school_year -> semesters).
+    let classInfo: any = null;
+    const { data: cls } = await supabase
+      .from('classes')
+      .select('school_year_id')
+      .eq('class_id', student.class_id)
+      .maybeSingle();
+    const yearId = cls?.school_year_id ?? null;
+
+    let sems: any[] = [];
+    if (yearId) {
+      const { data: s } = await supabase
+        .from('semesters')
+        .select('semester_id')
+        .eq('school_year_id', yearId)
+        .order('term_order', { ascending: true });
+      sems = s ?? [];
+    }
+    if (sems.length < 2) {
+      const { data: all } = await supabase
+        .from('semesters')
+        .select('semester_id')
+        .order('term_order', { ascending: true })
+        .limit(2);
+      sems = all ?? [];
+    }
+    const sem1Id = sems[0]?.semester_id;
+    const sem2Id = sems[1]?.semester_id;
+
+    const { data: results } = await supabase
+      .from('subject_results')
+      .select('result_id, subject_id, semester_id, ranking')
+      .eq('student_id', student.student_id);
+
+    // Lấy grade_types một lần.
+    const { data: gTypes } = await supabase.from('grade_types').select('grade_type_id, type_code, type_name');
+    const gs = gTypes ?? [];
+    const isTx = (t: any) => (t.type_code || '').toUpperCase() === 'TX' || (t.type_name || '').toLowerCase().includes('thường xuyên');
+    const isGk = (t: any) => (t.type_code || '').toUpperCase() === 'GK' || (t.type_name || '').toLowerCase().includes('giữa');
+    const isCk = (t: any) => (t.type_code || '').toUpperCase() === 'CK' || (t.type_name || '').toLowerCase().includes('cuối');
+    const typeBy = new Map<number, 'TX' | 'GK' | 'CK'>();
+    gs.forEach((t: any) => {
+      if (isTx(t)) typeBy.set(t.grade_type_id, 'TX');
+      else if (isGk(t)) typeBy.set(t.grade_type_id, 'GK');
+      else if (isCk(t)) typeBy.set(t.grade_type_id, 'CK');
+      else typeBy.set(t.grade_type_id, 'TX');
+    });
+
+    const semOf = new Map<number, number>(); // result_id -> semester_id
+    const rankingOf = new Map<number, string>(); // result_id -> ranking
+    const subjectOf = new Map<number, number>(); // result_id -> subject_id
+    const resultIds: number[] = [];
+    (results ?? []).forEach((r: any) => {
+      resultIds.push(r.result_id);
+      semOf.set(r.result_id, r.semester_id);
+      rankingOf.set(r.result_id, r.ranking);
+      subjectOf.set(r.result_id, r.subject_id);
+    });
+
+    // điểm TB môn từ grade_items.
+    const avgByResult = new Map<number, number>();
+    if (resultIds.length) {
+      for (let i = 0; i < resultIds.length; i += 500) {
+        const chunk = resultIds.slice(i, i + 500);
+        const { data: items } = await supabase
+          .from('grade_items')
+          .select('result_id, score, grade_type_id')
+          .in('result_id', chunk);
+        const agg = new Map<number, { sum: number; count: number }>();
+        (items ?? []).forEach((it: any) => {
+          const w = typeBy.get(it.grade_type_id) === 'GK' ? 2 : typeBy.get(it.grade_type_id) === 'CK' ? 3 : 1;
+          const cur = agg.get(it.result_id) || { sum: 0, count: 0 };
+          agg.set(it.result_id, { sum: cur.sum + Number(it.score) * w, count: cur.count + w });
+        });
+        agg.forEach((v, rid) => {
+          if (v.count > 0) avgByResult.set(rid, Number((v.sum / v.count).toFixed(2)));
+        });
+      }
+    }
+
+    // Gộp theo môn.
+    const { data: allSubjects } = await supabase
+      .from('subjects')
+      .select('subject_id, subject_name, subject_code')
+      .order('subject_id');
+
+    const subjectIds = Array.from(new Set((results ?? []).map((r: any) => r.subject_id)));
+    const rows = (allSubjects ?? []).map((s: any) => {
+      if (!subjectIds.includes(s.subject_id)) {
+        return {
+          subject_id: s.subject_id,
+          subject_name: s.subject_name,
+          subject_code: s.subject_code,
+          avg1: null,
+          avg2: null,
+          yearAvg: null,
+          ranking1: '',
+          ranking2: '',
+          ranking: '',
+        };
+      }
+      const myResults = (results ?? []).filter((r: any) => r.subject_id === s.subject_id);
+      const r1 = myResults.find((r: any) => r.semester_id === sem1Id);
+      const r2 = myResults.find((r: any) => r.semester_id === sem2Id);
+      const avg1 = r1 ? avgByResult.get(r1.result_id) ?? null : null;
+      const avg2 = r2 ? avgByResult.get(r2.result_id) ?? null : null;
+      const ranking1 = r1?.ranking ?? '';
+      const ranking2 = r2?.ranking ?? '';
+      let yearAvg: number | null = null;
+      if (avg1 != null && avg2 != null) yearAvg = Number(((avg1 + avg2 * 2) / 3).toFixed(2));
+      else yearAvg = avg2 ?? avg1;
+      return {
+        subject_id: s.subject_id,
+        subject_name: s.subject_name,
+        subject_code: s.subject_code,
+        avg1,
+        avg2,
+        yearAvg,
+        ranking1,
+        ranking2,
+        ranking: ranking2 || ranking1 || '',
+      };
+    });
+
+    // TBCN cả năm (chỉ môn có điểm).
+    const scored = rows.filter((r: any) => r.yearAvg != null);
+    const overall = scored.length
+      ? Number((scored.reduce((a, b) => a + b.yearAvg, 0) / scored.length).toFixed(2))
+      : null;
+
+    return success({ sem1Id, sem2Id, rows, overall });
   }
 
   async getMyTimetable(userId: number, semesterId?: number) {
@@ -131,7 +306,7 @@ export class StudentSelfService {
 
     let query = supabase
       .from('timetables')
-      .select('*, subjects(*), teachers(*), classes(*), semesters(*)')
+      .select('*, subjects(*), teachers(*), classes(*, rooms!classes_fixed_room_id_fkey(room_name)), semesters(*)')
       .eq('class_id', classId)
       .order('day_of_week')
       .order('period_no');
@@ -146,7 +321,11 @@ export class StudentSelfService {
 
     const DAY_MAP: Record<string, string> = { '1': 'Sunday', '2': 'Monday', '3': 'Tuesday', '4': 'Wednesday', '5': 'Thursday', '6': 'Friday', '7': 'Saturday' };
 
-    const enriched = (data || []).map((t: any) => ({
+    const enriched = (data || []).map((t: any) => {
+      const cls = Array.isArray(t.classes) ? t.classes[0] : t.classes;
+      const fixedRoom = cls?.rooms;
+      const roomName = Array.isArray(fixedRoom) ? fixedRoom[0]?.room_name : fixedRoom?.room_name;
+      return {
       schedule_id: t.schedule_id,
       class_id: t.class_id,
       subject_id: t.subject_id,
@@ -156,13 +335,14 @@ export class StudentSelfService {
       period_no: t.period_no,
       start_time: t.start_time,
       end_time: t.end_time,
-      room: t.room,
+      room: t.room || roomName || '',
       subject_name: t.subjects?.subject_name,
       class_name: t.classes?.class_name,
       subject_code: t.subjects?.subject_code,
       teacher_name: t.teachers?.full_name,
       semester_name: t.semesters?.semester_name,
-    }));
+    };
+    });
 
     return success(enriched);
   }
@@ -180,7 +360,7 @@ export class StudentSelfService {
 
     const { data, error: aErr } = await supabase
       .from('attendances')
-      .select('*, attendance_sessions(session_id, session_date, teacher_id, created_at)')
+      .select('*, attendance_sessions(session_id, session_date, attendance_date, session, teacher_id, created_at)')
       .eq('student_id', student.student_id)
       .order('attendance_id', { ascending: false });
 
@@ -194,6 +374,8 @@ export class StudentSelfService {
       check_time: a.check_time,
       note: a.note,
       session_date: a.attendance_sessions?.session_date,
+      attendance_date: a.attendance_sessions?.attendance_date ?? a.attendance_sessions?.session_date,
+      session: a.attendance_sessions?.session,
       created_at: a.attendance_sessions?.created_at,
     }));
 

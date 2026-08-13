@@ -3,13 +3,31 @@ import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
 export class ClassService {
- async findMany(params: { teacherId?: number; page?: number; limit?: number }) {
+ async findMany(params: { teacherId?: number; schoolYearId?: number; page?: number; limit?: number }) {
  const { offset, limit } = buildPagination({ page: params.page, limit: params.limit });
 
  let q = supabase.from('classes').select('*', { count: 'exact' });
 
  if (params.teacherId) {
  q = q.eq('homeroom_teacher_id', params.teacherId);
+ }
+
+ // Default to the current school year unless explicitly requested (all).
+ if (params.schoolYearId !== undefined) {
+ if (params.schoolYearId === -1) {
+   // -1 = no filter (all years). keep as-is.
+ } else {
+   q = q.eq('school_year_id', params.schoolYearId);
+ }
+ } else {
+ const { data: currentYear } = await supabase
+   .from('school_years')
+   .select('school_year_id')
+   .eq('is_current', true)
+   .maybeSingle();
+ if (currentYear) {
+   q = q.eq('school_year_id', currentYear.school_year_id);
+ }
  }
 
  const result = await q.order('class_name').range(offset, offset + limit);
@@ -88,10 +106,12 @@ export class ClassService {
  return success(result.data ?? []);
  }
 
- async getGradeStats() {
- const { data: classes, error: classError } = await supabase
- .from('classes')
- .select('class_id, grade_level');
+ async getGradeStats(schoolYearId?: number) {
+ let classQuery = supabase.from('classes').select('class_id, grade_level, school_year_id');
+ if (schoolYearId) {
+   classQuery = classQuery.eq('school_year_id', schoolYearId);
+ }
+ const { data: classes, error: classError } = await classQuery;
 
  if (classError) return error(classError.message, 'DB_ERROR');
 
@@ -127,11 +147,12 @@ export class ClassService {
  return success(result);
  }
 
-  async update(classId: number, data: { homeroom_teacher_id?: number | null; class_name?: string; grade_level?: number }) {
+  async update(classId: number, data: { homeroom_teacher_id?: number | null; class_name?: string; grade_level?: number; fixed_room_id?: number | null }) {
     const updateData: any = {};
     if ('homeroom_teacher_id' in data) updateData.homeroom_teacher_id = data.homeroom_teacher_id;
     if ('class_name' in data) updateData.class_name = data.class_name;
     if ('grade_level' in data) updateData.grade_level = data.grade_level;
+    if ('fixed_room_id' in data) updateData.fixed_room_id = data.fixed_room_id ?? null;
 
     const { data: updated, error: dbError } = await supabase
       .from('classes')
@@ -148,6 +169,9 @@ export class ClassService {
   }
 
   async addStudent(classId: number, studentData: { full_name?: string; student_code?: string; gender?: string; date_of_birth?: string; student_id?: number }) {
+    // Lấy lớp để biết school_year_id + grade_level.
+    const { data: cls } = await supabase.from('classes').select('school_year_id, grade_level').eq('class_id', classId).maybeSingle();
+
     if (studentData.student_id) {
       const { data: updated, error: dbError } = await supabase
         .from('students')
@@ -156,6 +180,11 @@ export class ClassService {
         .select('*')
         .single();
       if (dbError) return error(dbError.message, 'DB_ERROR');
+
+      // Lưu lịch sử phân lớp (upsert theo student + school_year).
+      if (cls?.school_year_id) {
+        await this.upsertEnrollment(studentData.student_id, classId, cls.school_year_id, cls.grade_level, 'ACTIVE');
+      }
       return success(updated);
     }
 
@@ -172,7 +201,27 @@ export class ClassService {
       .single();
 
     if (dbError) return error(dbError.message, 'DB_ERROR');
+
+    if (cls?.school_year_id && created) {
+      await this.upsertEnrollment(created.student_id, classId, cls.school_year_id, cls.grade_level, 'ACTIVE');
+    }
     return success(created);
+  }
+
+  private async upsertEnrollment(studentId: number, classId: number, schoolYearId: number, gradeLevel: number | null, status: string) {
+    const { data: existing } = await supabase
+      .from('student_class_enrollments')
+      .select('enrollment_id')
+      .eq('student_id', studentId)
+      .eq('school_year_id', schoolYearId)
+      .maybeSingle();
+
+    const payload = { student_id: studentId, class_id: classId, school_year_id: schoolYearId, grade_level: gradeLevel, status };
+    if (existing) {
+      await supabase.from('student_class_enrollments').update(payload).eq('enrollment_id', existing.enrollment_id);
+    } else {
+      await supabase.from('student_class_enrollments').insert(payload);
+    }
   }
 
   async removeStudent(classId: number, studentId: number) {
@@ -185,6 +234,52 @@ export class ClassService {
 
     if (dbError) return error(dbError.message, 'DB_ERROR');
     return success(updated);
+  }
+
+  async create(data: { class_name: string; grade_level?: number; school_year_id?: number; homeroom_teacher_id?: number | null }) {
+    if (!data.class_name || !String(data.class_name).trim()) {
+      return error('Tên lớp không được để trống', 'VALIDATION_ERROR');
+    }
+
+    // Default to the current school year unless provided.
+    let schoolYearId = data.school_year_id;
+    if (!schoolYearId) {
+      const { data: currentYear } = await supabase
+        .from('school_years')
+        .select('school_year_id')
+        .eq('is_current', true)
+        .maybeSingle();
+      schoolYearId = currentYear?.school_year_id ?? null;
+    }
+
+    const { data: created, error: dbError } = await supabase
+      .from('classes')
+      .insert({
+        class_name: String(data.class_name).trim(),
+        grade_level: data.grade_level ?? null,
+        school_year_id: schoolYearId ?? null,
+        homeroom_teacher_id: data.homeroom_teacher_id ?? null,
+      })
+      .select('*')
+      .single();
+
+    if (dbError) return error(dbError.message, 'DB_ERROR');
+    return success(created);
+  }
+
+  async remove(classId: number) {
+    const { count: studentCount } = await supabase
+      .from('students')
+      .select('*', { count: 'exact', head: true })
+      .eq('class_id', classId);
+
+    if ((studentCount ?? 0) > 0) {
+      return error('Không thể xóa lớp vì vẫn còn học sinh', 'CLASS_NOT_EMPTY');
+    }
+
+    const { error: dbError } = await supabase.from('classes').delete().eq('class_id', classId);
+    if (dbError) return error(dbError.message, 'DB_ERROR');
+    return success(true);
   }
 }
 
