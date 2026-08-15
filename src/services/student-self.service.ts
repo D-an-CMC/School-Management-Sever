@@ -74,6 +74,35 @@ export class StudentSelfService {
     return success({ ...student, class_info: classInfo, user: user ?? {} });
   }
 
+  // Map môn học -> giáo viên (tên + mã) của một lớp.
+  // Ưu tiên teaching_assignments; fallback sang timetables (lịch dạy thực tế) khi chưa có.
+  private async getSubjectTeachers(classId: number): Promise<Map<number, { teacher_name: string; teacher_code: string }>> {
+    const map = new Map<number, { teacher_name: string; teacher_code: string }>();
+    const { data: assignments } = await supabase
+      .from('teaching_assignments')
+      .select('subject_id, teachers(full_name, teacher_code)')
+      .eq('class_id', classId);
+    (assignments ?? []).forEach((a: any) => {
+      const t = Array.isArray(a.teachers) ? a.teachers[0] : a.teachers;
+      if (t && t.full_name) {
+        map.set(Number(a.subject_id), { teacher_name: t.full_name, teacher_code: t.teacher_code ?? '' });
+      }
+    });
+    if (map.size > 0) return map;
+
+    const { data: timetables } = await supabase
+      .from('timetables')
+      .select('subject_id, teachers!timetables_teacher_id_fkey(full_name, teacher_code)')
+      .eq('class_id', classId);
+    (timetables ?? []).forEach((tt: any) => {
+      const t = Array.isArray(tt.teachers) ? tt.teachers[0] : tt.teachers;
+      if (t && t.full_name && !map.has(Number(tt.subject_id))) {
+        map.set(Number(tt.subject_id), { teacher_name: t.full_name, teacher_code: t.teacher_code ?? '' });
+      }
+    });
+    return map;
+  }
+
   async getMyGrades(userId: number, semesterId?: number) {
     const student = await this.ensureStudent(userId);
 
@@ -99,12 +128,16 @@ export class StudentSelfService {
       .select('subject_id, subject_name, subject_code')
       .order('subject_id');
 
+    const teacherMap = await this.getSubjectTeachers(student.class_id);
+
     const enriched = await Promise.all((results || []).map(async (r: any) => {
       const { data: items } = await supabase
         .from('grade_items')
         .select('*, grade_types(*)')
         .eq('result_id', r.result_id)
         .order('sequence_no');
+
+      const teacher = teacherMap.get(Number(r.subject_id));
 
       return {
         result_id: r.result_id,
@@ -113,6 +146,8 @@ export class StudentSelfService {
         subject_name: r.subjects?.subject_name,
         subject_code: r.subjects?.subject_code,
         semester_name: r.semesters?.semester_name,
+        teacher_name: teacher?.teacher_name ?? null,
+        teacher_code: teacher?.teacher_code ?? null,
         dtb_mhk: r.dtb_mhk,
         dtb_mcn: r.dtb_mcn,
         reassess_dtb_mhk: r.reassess_dtb_mhk,
@@ -138,6 +173,7 @@ export class StudentSelfService {
     const merged = (allSubjects || []).map((s: any) => {
       const existing = bySubject.get(Number(s.subject_id));
       if (existing) return existing;
+      const teacher = teacherMap.get(Number(s.subject_id));
       return {
         result_id: null,
         subject_id: s.subject_id,
@@ -145,6 +181,8 @@ export class StudentSelfService {
         subject_name: s.subject_name,
         subject_code: s.subject_code,
         semester_name: null,
+        teacher_name: teacher?.teacher_name ?? null,
+        teacher_code: teacher?.teacher_code ?? null,
         dtb_mhk: null,
         dtb_mcn: null,
         reassess_dtb_mhk: null,
@@ -253,12 +291,16 @@ export class StudentSelfService {
       .order('subject_id');
 
     const subjectIds = Array.from(new Set((results ?? []).map((r: any) => r.subject_id)));
+    const teacherMap = await this.getSubjectTeachers(student.class_id);
     const rows = (allSubjects ?? []).map((s: any) => {
+      const teacher = teacherMap.get(Number(s.subject_id));
       if (!subjectIds.includes(s.subject_id)) {
         return {
           subject_id: s.subject_id,
           subject_name: s.subject_name,
           subject_code: s.subject_code,
+          teacher_name: teacher?.teacher_name ?? null,
+          teacher_code: teacher?.teacher_code ?? null,
           avg1: null,
           avg2: null,
           yearAvg: null,
@@ -281,6 +323,8 @@ export class StudentSelfService {
         subject_id: s.subject_id,
         subject_name: s.subject_name,
         subject_code: s.subject_code,
+        teacher_name: teacher?.teacher_name ?? null,
+        teacher_code: teacher?.teacher_code ?? null,
         avg1,
         avg2,
         yearAvg,

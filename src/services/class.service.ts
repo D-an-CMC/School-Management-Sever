@@ -1,6 +1,7 @@
 import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
+import { generateStudentCode } from './user.service';
 
 export class ClassService {
  async findMany(params: { teacherId?: number; schoolYearId?: number; page?: number; limit?: number }) {
@@ -188,12 +189,13 @@ export class ClassService {
       return success(updated);
     }
 
+    const studentCode = studentData.student_code?.trim() || (await generateStudentCode(cls?.school_year_id));
     const { data: created, error: dbError } = await supabase
       .from('students')
       .insert({
         class_id: classId,
         full_name: studentData.full_name,
-        student_code: studentData.student_code,
+        student_code: studentCode,
         gender: studentData.gender,
         date_of_birth: studentData.date_of_birth || null,
       })

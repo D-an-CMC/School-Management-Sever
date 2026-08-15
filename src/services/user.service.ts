@@ -35,29 +35,41 @@ function toSlug(name: string): string {
     .replace(/^\.|\.$/g, '');
 }
 
-async function generateStudentCode(schoolYearId: number): Promise<string> {
-  const { data: sy } = await supabase
-    .from('school_years')
-    .select('year_name')
-    .eq('school_year_id', schoolYearId)
-    .single();
+async function generateStudentCode(schoolYearId?: number): Promise<string> {
+  // Format theo năm học: "HS" + 2 số năm + 4 số tuần tự (VD: HS250001).
+  // Không truyền yearId => dùng năm học hiện tại (is_current=true).
+  // Tự nới rộng số chữ số khi đạt giới hạn (HS259999 -> HS2510000).
+  let yearName: string | undefined;
+  if (schoolYearId) {
+    const { data } = await supabase.from('school_years').select('year_name').eq('school_year_id', schoolYearId).single();
+    yearName = data?.year_name as string | undefined;
+  } else {
+    const { data } = await supabase.from('school_years').select('year_name').eq('is_current', true).single();
+    yearName = data?.year_name as string | undefined;
+  }
+  const base = yearName ? Number(yearName.split('-')[0]) : new Date().getFullYear();
+  const yearSuffix = String(Number.isNaN(base) ? new Date().getFullYear() : base).slice(-2).padStart(2, '0');
 
-  const yearName = (sy?.year_name as string) || String(new Date().getFullYear());
-  const baseYear = Number(yearName.split('-')[0]);
-  const yearSuffix = String(baseYear).slice(-2);
-  const prefix = `HS${yearSuffix}_`;
-
+  const prefix = `HS${yearSuffix}`;
   const { data } = await supabase
     .from('students')
     .select('student_code')
     .like('student_code', `${prefix}%`)
     .order('student_code', { ascending: false })
-    .limit(1);
+    .limit(50);
 
-  const raw = (data?.[0]?.student_code as string | undefined) || '';
-  const m = raw.match(/^HS\d{2}_(\d{4})$/);
-  const next = m ? Number(m[1]) + 1 : 1;
-  return `${prefix}${String(next).padStart(4, '0')}`;
+  let maxNum = 0;
+  let width = 4;
+  for (const row of data ?? []) {
+    const m = (row.student_code as string).match(/^HS\d{2}(\d+)$/);
+    if (m) {
+      maxNum = Math.max(maxNum, Number(m[1]));
+      width = Math.max(width, m[1].length);
+    }
+  }
+  const next = maxNum + 1;
+  const padded = String(next).padStart(Math.max(width, String(next).length), '0');
+  return `${prefix}${padded}`;
 }
 
 async function generateTeacherCode(): Promise<string> {
@@ -78,7 +90,7 @@ export class UserService {
 
     let q = supabase
       .from('users')
-      .select('user_id, email, username, phone, is_active, role_id, roles(role_name)', { count: 'exact' });
+      .select('user_id, email, username, phone, is_active, role_id, department_id, departments(department_name), roles(role_name)', { count: 'exact' });
 
     if (params.search) {
     q = q.or(`email.ilike.%${params.search}%,username.ilike.%${params.search}%`);
@@ -95,6 +107,7 @@ export class UserService {
     const users = (result.data ?? []).map((u: any) => ({
       ...u,
       role_name: u.roles?.role_name || '',
+      department: u.departments?.department_name || null,
     }));
 
     return {
@@ -131,16 +144,13 @@ export class UserService {
     let studentCode: string | undefined = input.student_code;
     let teacherCode: string | undefined = input.teacher_code;
 
-    let schoolYearIdForStudent: number | undefined
-    if (input.role === 'HocSinh-PhuHuynh' && !studentCode && input.class_id) {
-      schoolYearIdForStudent = input.school_year_id
-      if (!schoolYearIdForStudent) {
-        const classQuery = await supabase.from('classes').select('school_year_id').eq('class_id', input.class_id).single()
-        schoolYearIdForStudent = classQuery.data?.school_year_id as number | undefined
+    if (input.role === 'HocSinh-PhuHuynh' && !studentCode) {
+      let yearId = input.school_year_id;
+      if (!yearId && input.class_id) {
+        const classQuery = await supabase.from('classes').select('school_year_id').eq('class_id', input.class_id).single();
+        yearId = classQuery.data?.school_year_id as number | undefined;
       }
-      if (schoolYearIdForStudent) {
-        studentCode = await generateStudentCode(schoolYearIdForStudent)
-      }
+      studentCode = await generateStudentCode(yearId);
     }
     if (input.role === 'GiaoVien' && !teacherCode) {
       teacherCode = await generateTeacherCode();
@@ -271,6 +281,10 @@ export class UserService {
     if (patch.phone !== undefined) updateData.phone = patch.phone;
     if (patch.is_active !== undefined) updateData.is_active = patch.is_active;
     if (patch.password !== undefined) updateData.password = patch.password;
+    if (patch.department !== undefined && patch.department !== '') {
+      const { data: deptRow } = await supabase.from('departments').select('department_id').eq('department_name', patch.department).maybeSingle();
+      if (deptRow) updateData.department_id = deptRow.department_id;
+    }
     if (patch.role !== undefined) {
       const { data: roleRow } = await supabase.from("roles").select("role_id").eq("role_name", patch.role).single();
       if (roleRow) updateData.role_id = roleRow.role_id;

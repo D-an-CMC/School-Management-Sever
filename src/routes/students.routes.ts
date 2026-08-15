@@ -27,6 +27,19 @@ router.get('/', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => 
   }
 });
 
+router.get('/unassigned/count', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
+  try {
+    const { count, error } = await supabase
+      .from('students')
+      .select('student_id', { count: 'exact', head: true })
+      .is('class_id', null);
+    if (error) return res.status(400).json({ success: false, error: error.message });
+    return res.json({ success: true, data: { unassignedCount: count ?? 0 } });
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 router.get('/:id', async (req: any, res) => {
   try {
     const userId = (req as any).user?.userId;
@@ -72,7 +85,7 @@ router.get('/preview/code', roleMiddleware(['Admin', 'GiaoVien']), async (req: a
       const c = await supabase.from('classes').select('school_year_id').eq('class_id', classId).single()
       yearId = c.data?.school_year_id
     }
-    const code = await generateStudentCode(yearId || 1);
+    const code = await generateStudentCode(yearId);
     return res.json({ success: true, data: { student_code: code, email: `${code}@cmc.edu.vn` } });
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });

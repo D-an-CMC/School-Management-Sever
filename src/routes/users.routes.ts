@@ -10,11 +10,11 @@ const router = Router();
 router.get('/departments', async (_req: any, res) => {
   try {
     const { data, error } = await supabase
-      .from('teachers')
-      .select('department')
-      .not('department', 'is', null)
+      .from('departments')
+      .select('department_name')
+      .order('department_id')
     if (error) throw error
-    const unique = (data as any[]).map((r) => r.department_name as string)
+    const unique = (data as any[]).map((r) => r.department_name as string).filter(Boolean)
     return res.json({ success: true, data: unique })
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message })
