@@ -6,7 +6,9 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   JWT_SECRET: z.string().min(32),
-  CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  // CORS: danh sách origin cách nhau bởi dấu phẩy. Nếu trống → cho phép tất cả
+  // origin (server chỉ xác thực qua Authorization Bearer token, không dùng cookie).
+  CORS_ORIGIN: z.string().default(''),
 
   // ── AI Assistant ─────────────────────────────────────────────
   DATABASE_URL: z.string().optional(),
