@@ -2,10 +2,6 @@ import { supabase } from '../config/supabase';
 import { success, error as errResp } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 
-// Chuẩn trạng thái điểm danh mới (đơn vị: BUỔI).
-export const ATTENDANCE_STATUS = ['PRESENT', 'ABSENT_EXCUSED', 'ABSENT_UNEXCUSED', 'LATE'] as const;
-export const SESSIONS = ['MORNING', 'AFTERNOON'] as const;
-
 // Map từ status cũ sang chuẩn mới (dự phòng cho dữ liệu cũ).
 export function normalizeStatus(raw?: string | null): string {
   switch (raw) {

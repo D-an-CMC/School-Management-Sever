@@ -88,7 +88,3 @@ export const dbSchemaTool: DbSchemaTool = {
     return JSON.stringify(map);
   },
 };
-
-export async function clearSchemaCache() {
-  cache = null;
-}

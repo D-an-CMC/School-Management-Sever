@@ -39,21 +39,6 @@ async function resolveSemesterId(semesterId?: number): Promise<number> {
 	return firstSem?.semester_id || 1;
 }
 
-// Build the subject_results row for a given student+subject (per semester),
-// matching the lookup logic used elsewhere.
-async function findResultRow(studentId: number, subjectId: number, semesterId: number) {
-	const { data: existingSrs } = await supabase
-		.from('subject_results')
-		.select('result_id')
-		.eq('student_id', studentId)
-		.eq('subject_id', subjectId)
-		.eq('semester_id', semesterId)
-		.order('result_id', { ascending: false });
-
-	if (existingSrs && existingSrs.length > 0) return existingSrs[0].result_id;
-	return null;
-}
-
 export class GradeService {
 	async findByClass(classId: number, subjectId?: number, semesterId?: number, mode?: string) {
 		// "year" / "ca-nam" aggregates both semesters of the current school year.

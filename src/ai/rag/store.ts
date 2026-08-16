@@ -69,13 +69,6 @@ export async function ragStatus(): Promise<{ source: string; chunks: number }[]>
   return rows.map((r) => ({ source: r.source, chunks: Number(r.chunks) }));
 }
 
-export async function ragTotalDocs(): Promise<number> {
-  const { rows } = await queryPool<{ count: string }>(
-    `SELECT COUNT(*) AS count FROM public.ai_documents`
-  );
-  return Number(rows[0]?.count ?? 0);
-}
-
 export async function deleteSource(sourceName: string): Promise<void> {
   await queryPool(`DELETE FROM public.ai_documents WHERE source_name = $1`, [sourceName]);
 }

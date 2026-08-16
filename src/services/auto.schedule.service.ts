@@ -13,7 +13,6 @@ import { success, error } from '../utils/response';
 // ─────────────────────────────────────────────────────────────
 
 const MIN_PER_DAY = 3;
-const MAX_PER_DAY = 5;
 
 // Khoa học tự nhiên (KHTN) is stored as a single subject in the DB, but the
 // school schedules it as three sub-disciplines (Sinh / Lý / Hóa). When the

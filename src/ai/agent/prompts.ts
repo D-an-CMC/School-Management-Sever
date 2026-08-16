@@ -37,20 +37,3 @@ ${ROLE_GUIDE[ctx.role] ?? ROLE_GUIDE['HocSinh-PhuHuynh']}
 
 Trả lời lịch sự, trung thực và hữu ích.`;
 }
-
-export function buildFollowUpPrompt(question: string, history: { role: string; content: string }[]): string {
-  const q = question.trim();
-  if (q.length > 200) return q.slice(0, 200) + '...';
-  return q;
-}
-
-export function summarizeHistory(
-  history: { role: string; content: string }[],
-  max: number
-): { role: 'user' | 'assistant' | 'tool'; content: string }[] {
-  const trimmed = history.slice(-max);
-  return trimmed.map((h) => ({
-    role: h.role === 'user' ? 'user' : 'assistant',
-    content: h.content.length > 4000 ? h.content.slice(0, 4000) + '…' : h.content,
-  }));
-}

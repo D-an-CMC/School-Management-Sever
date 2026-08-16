@@ -26,10 +26,3 @@ export async function queryPool<T = any>(
 ): Promise<{ rows: T[]; rowCount: number | null }> {
   return getPool().query(text, params);
 }
-
-export async function closePool(): Promise<void> {
-  if (pool) {
-    await pool.end();
-    pool = null;
-  }
-}

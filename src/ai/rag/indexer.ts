@@ -10,8 +10,6 @@ export interface ChunkCandidate {
   content: string;
 }
 
-export type ChunkSplitter = (text: string) => string[];
-
 export function chunkMarkdown(text: string, maxLen: number = 800, overlap: number = 100): string[] {
   const normalized = text.replace(/\r\n/g, '\n');
   const lines = normalized.split('\n');
