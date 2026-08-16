@@ -38,5 +38,6 @@ CREATE TABLE IF NOT EXISTS public.ai_documents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (source_name, chunk_index)
 );
-CREATE INDEX IF NOT EXISTS ai_documents_embedding_idx
-  ON public.ai_documents USING hnsw (embedding vector_cosine_ops);
+-- Không tạo HNSW/IVFFlat index: pgvector giới hạn tối đa 2000 dims,
+-- model Nemotron-3-Embed-1B trả 2048 dims. Seq scan vẫn đủ nhanh
+-- với vài trăm chunks và giữ kết quả cosine chính xác tuyệt đối.
