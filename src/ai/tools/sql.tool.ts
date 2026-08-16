@@ -148,10 +148,15 @@ const HAS_PG_INTERNAL = /\b(pg_|information_schema|citus_|timescaledb_)/i;
 
 function extractTables(sql: string): string[] {
   const out = new Set<string>();
-  const re = /(?:from|join)\s+([a-z_][a-z0-9_]*)/gi;
+  // C3: trước đây chỉ bắt 1 bảng sau FROM/JOIN — "FROM students, users" chỉ bắt students,
+  // bỏ lọt users khỏi whitelist + scope. Giờ bắt cả danh sách tách bằng dấu phẩy.
+  const re = /(?:from|join)\s+([a-z_][a-z0-9_]*(?:\s*,\s*[a-z_][a-z0-9_]*)*)/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(sql)) !== null) {
-    out.add(m[1].toLowerCase());
+    m[1]
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .forEach((t) => out.add(t));
   }
   return [...out];
 }

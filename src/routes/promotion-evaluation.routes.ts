@@ -67,7 +67,7 @@ router.post('/results/:resultId/confirm', roleMiddleware(['Admin', 'GiaoVien']),
   try {
     const resultId = Number(req.params.resultId);
     const { finalResult } = z.object({ finalResult: z.string() }).parse(req.body);
-    const reviewerId = Number(req.user?.id);
+    const reviewerId = Number(req.user?.userId);
     const result = await promotionEvaluationService.confirmResult(resultId, finalResult, reviewerId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
@@ -80,7 +80,7 @@ router.post('/results/:resultId/confirm', roleMiddleware(['Admin', 'GiaoVien']),
 router.post('/results/:resultId/finalize', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
     const resultId = Number(req.params.resultId);
-    const finalizerId = Number(req.user?.id);
+    const finalizerId = Number(req.user?.userId);
     const result = await promotionEvaluationService.finalizeResult(resultId, finalizerId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);

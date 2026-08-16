@@ -231,7 +231,12 @@ async function ensureSemesters(yearId: number) {
   const start = year?.start_date ? new Date(year.start_date) : null;
   const end = year?.end_date ? new Date(year.end_date) : null;
   const hk1End = start ? new Date(start.getTime()) : null;
-  if (hk1End) hk1End.setMonth(0, 14); // 14/01 (năm kế tiếp vì HK1 nằm cuối năm cũ)
+  // H9: setMonth(0,14) chỉ đổi tháng/ngày TRONG năm hiện tại — phải vượt sang năm sau
+  // (HK1 đặt 14/01 của năm kế tiếp, vì HK1 nằm ở cuối năm học cũ).
+  if (hk1End) {
+    hk1End.setFullYear(start!.getFullYear() + 1);
+    hk1End.setMonth(0, 14);
+  }
   const hk2Start = hk1End ? new Date(hk1End.getTime() + 86400000) : null; // 15/01
 
   await supabase.from('semesters').insert([
@@ -496,6 +501,13 @@ export class YearTransitionService {
       : { data: [] };
     const classById = new Map((classRows ?? []).map((c: any) => [c.class_id, c.class_name]));
 
+    // H7b: decisions gửi class_id tuỳ ý — chỉ chấp nhận lớp THUỘC năm đích.
+    const { data: targetYearClasses } = await supabase
+      .from('classes')
+      .select('class_id')
+      .eq('school_year_id', toYearId);
+    const validTargetClassIds = new Set((targetYearClasses ?? []).map((c: any) => Number(c.class_id)));
+
     const errors: string[] = [];
     let enrolled = 0;
 
@@ -521,6 +533,7 @@ export class YearTransitionService {
       const decision = decisionsByStudent.get(studentId);
       // Quyết định ghi đè (nếu có), ngược lại dùng đề xuất tự động.
       const status = decision && decision.status ? String(decision.status).toUpperCase() : suggestion.status;
+      const decisionClassId = validTargetClassIds.has(Number(decision?.class_id)) ? decision?.class_id : undefined;
 
       // Xác định lớp mới.
       let classId: number | null = null;
@@ -531,10 +544,10 @@ export class YearTransitionService {
       } else if (status === 'PROMOTED') {
         const nextGrade = grade < 9 ? grade + 1 : null;
         gradeLevel = nextGrade;
-        classId = decision?.class_id ?? await findTargetClass(toYearId, nextGrade!, suffix);
+        classId = decisionClassId ?? await findTargetClass(toYearId, nextGrade!, suffix);
       } else { // RETAINED
         gradeLevel = grade;
-        classId = decision?.class_id ?? await findTargetClass(toYearId, grade, suffix);
+        classId = decisionClassId ?? await findTargetClass(toYearId, grade, suffix);
       }
 
       // upsert enrollment cho toYear.

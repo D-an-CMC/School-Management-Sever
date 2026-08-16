@@ -346,7 +346,11 @@ export class StudentSelfService {
   async getMyTimetable(userId: number, semesterId?: number) {
     const student = await this.ensureStudent(userId);
 
-    const classId = student?.class_id || 1;
+    // L4: trước đây class_id thiếu âm thầm tra TKB của lớp 1.
+    if (!student?.class_id) {
+      return error('Tài khoản của bạn chưa được xếp vào lớp nào — hãy báo giáo viên chủ nhiệm/trường.', 'NO_CLASS');
+    }
+    const classId = student.class_id;
 
     let query = supabase
       .from('timetables')

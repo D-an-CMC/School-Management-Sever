@@ -101,7 +101,8 @@ export class AiService {
       .slice(-env.AI_MAX_HISTORY)
       .map((m) => ({ role: m.role, content: m.content }));
 
-    await appendMessage(conversationId, 'user', question);
+    // L5: chỉ ghi vào lịch sử khi agent chạy THÀNH CÔNG — trước đây lưu câu hỏi
+    // trước khi chạy, lỗi AI thì lịch sử đầy câu hỏi mồ côi không có câu trả lời.
 
     let result;
     try {
@@ -131,6 +132,7 @@ export class AiService {
       throw e;
     }
 
+    await appendMessage(conversationId, 'user', question);
     await appendMessage(conversationId, 'assistant', result.answer, result.steps, result.citations);
     await touchConversationTitle(conversationId, question);
 

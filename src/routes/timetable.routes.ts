@@ -161,13 +161,13 @@ router.post('/exams/:scheduleId/proctors', roleMiddleware(['Admin']), async (req
   }
 });
 
-router.get('/subjects', async (_req, res) => {
+router.get('/subjects', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
   const result = await timetableService.subjects();
   if (!result.success) return res.status(400).json(result);
   return res.json(result);
 });
 
-router.post('/subjects', async (req: any, res) => {
+router.post('/subjects', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const result = await timetableService.getOrCreateSubject({ subject_name: req.body?.subject_name, subject_code: req.body?.subject_code });
     if (!result.success) return res.status(400).json(result);
@@ -177,7 +177,7 @@ router.post('/subjects', async (req: any, res) => {
   }
 });
 
-router.get('/semesters', async (_req, res) => {
+router.get('/semesters', roleMiddleware(['Admin', 'GiaoVien']), async (_req, res) => {
   const result = await timetableService.semesters();
   if (!result.success) return res.status(400).json(result);
   return res.json(result);
@@ -279,6 +279,8 @@ router.get('/my', async (req: any, res) => {
 router.post('/bulk', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const { entries, weekStart } = req.body;
+    // H1: thiếu weekStart làm delete trong bulkCreate xoá TKB của MỌI tuần.
+    if (!weekStart) return res.status(400).json({ success: false, error: 'Thiếu weekStart (thứ 2 của tuần cần ghi)', code: 'VALIDATION_ERROR' });
     const result = await timetableService.bulkCreate(entries || [], weekStart);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);

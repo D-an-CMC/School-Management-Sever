@@ -63,6 +63,8 @@ router.post('/class/:classId/batch', roleMiddleware(['Admin', 'GiaoVien']), asyn
     const classId = Number(req.params.classId);
     const { grades, subjectId, subject_id, semesterId } = req.body;
     const sId = subjectId || subject_id;
+    // H3: thiếu subjectId trước đây âm thầm ghi điểm vào môn id=1 (Toán).
+    if (!sId) return res.status(400).json({ success: false, error: 'Thiếu subjectId', code: 'VALIDATION_ERROR' });
     const result = await gradeService.saveClassGrades(classId, grades, sId, semesterId);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);

@@ -103,9 +103,16 @@ export class AttendanceService {
     }
 
     const sessionCol = data.session === 'AFTERNOON' ? 'AFTERNOON' : 'MORNING';
+    // H4: trước đây lấy ngày theo UTC — trước 07:00 giờ Việt Nam bị ghi nhầm sang ngày hôm sau.
+    const todayInVietnam = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
     const attendanceDate = data.sessionDate
       ? new Date(data.sessionDate).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10);
+      : todayInVietnam;
 
     const result = await supabase
       .from('attendance_sessions')

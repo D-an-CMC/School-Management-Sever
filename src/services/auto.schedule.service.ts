@@ -805,11 +805,13 @@ export class AutoScheduleService {
 
     // 9) Persist (replace): clear the whole semester's timetable for these classes
     // first, so no stale/gapped rows from older runs remain, then insert all weeks.
+    // H2: chỉ xoá dòng HỌC THƯỜNG (type 1) — không được phép vứt Lịch thi (type 2).
     await supabase
       .from('timetables')
       .delete()
       .in('class_id', classIds)
-      .eq('semester_id', semesterId);
+      .eq('semester_id', semesterId)
+      .eq('timetable_type_id', 1);
     for (const wk of weekStarts) {
       for (const batch of chunk(generated, 100)) {
         const rows = batch.map((r) => ({

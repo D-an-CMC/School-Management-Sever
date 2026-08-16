@@ -45,3 +45,6 @@ export function cleanupRateLimitBuckets() {
     if (b.resetAt < now) buckets.delete(k);
   }
 }
+
+// L3: dọn bucket hết hạn mỗi 5 phút để tránh rò rỉ bộ nhớ trên server chạy lâu.
+setInterval(cleanupRateLimitBuckets, 5 * 60 * 1000).unref();

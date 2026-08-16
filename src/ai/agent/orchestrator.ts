@@ -63,7 +63,21 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
   const totalTurns = env.AI_MAX_TURNS;
 
   for (let turn = 0; turn < totalTurns; turn++) {
-    const resp = await callChat(messages, tools, { maxTokens });
+    let resp;
+    try {
+      resp = await callChat(messages, tools, { maxTokens });
+    } catch (e: any) {
+      // M2: lỗi transient (NIM gián đoạn) — báo lại có ngữ cảnh, không để exception
+      // giết conversation.
+      warnings.push(`Lỗi gọi AI ở vòng ${turn + 1}: ${e?.message ?? e}`);
+      return {
+        answer:
+          'Xin lỗi, dịch vụ AI đang bận — tôi chưa xử lý được câu hỏi. Vui lòng thử lại sau ít phút.',
+        steps,
+        citations,
+        warnings,
+      };
+    }
 
     if (resp.error) throw new Error(resp.error);
 
@@ -145,7 +159,10 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       }
 
       messages.push({ role: 'assistant', content: null, tool_calls: [call] });
-      messages.push({ role: 'tool', tool_call_id: call.id, name: tool.name, content: result });
+      // M2: tool result đẩy thẳng vào history — cắt ≤ 4000 ký tự để khỏi thổi token
+      // window khi SQL trả về hàng nghìn dòng.
+      const truncated = result.length > 4000 ? result.slice(0, 4000) + '\n…(bị cắt)' : result;
+      messages.push({ role: 'tool', tool_call_id: call.id, name: tool.name, content: truncated });
     }
   }
 

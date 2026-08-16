@@ -21,7 +21,9 @@ router.get('/departments', async (_req: any, res) => {
   }
 })
 
-router.get('/public/accounts', async (req: any, res) => {
+router.use(authMiddleware);
+
+router.get('/public/accounts', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
@@ -43,8 +45,6 @@ router.get('/public/accounts', async (req: any, res) => {
     return res.status(400).json({ success: false, error: err.message });
   }
 });
-
-router.use(authMiddleware);
 
 const paginationSchema = z.object({
   search: z.string().optional(),
@@ -69,7 +69,7 @@ router.get('/', roleMiddleware(['Admin']), async (req: any, res) => {
   }
 });
 
-router.get('/:id', async (req: any, res) => {
+router.get('/:id', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
   try {
     const result = await userService.findById(Number(req.params.id));
     if (!result.success) return res.status(404).json(result);

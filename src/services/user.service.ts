@@ -120,7 +120,12 @@ export class UserService {
   }
 
   async findById(userId: number) {
-    const result = await supabase.from('users').select('*').eq('user_id', userId).single();
+    // Không bao giờ trả cột password (C2: trước đây select('*') lộ mật khẩu plaintext).
+    const result = await supabase
+      .from('users')
+      .select('user_id, auth_id, email, username, phone, role_id, is_active, created_at, department_id, emergency_phone')
+      .eq('user_id', userId)
+      .single();
 
     if (result.error || !result.data) {
       return errResp('Không tìm thấy người dùng', 'NOT_FOUND');

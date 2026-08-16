@@ -44,7 +44,7 @@ const ALL_TABLES = [
 ];
 
 let cache: { data: Record<string, ColumnInfo[]>; at: number } | null = null;
-const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_MS = 10 * 60 * 1000; // M1: 1h quá lâu — sau migration agent phục vụ schema cũ 60 phút
 
 async function fetchSchema(): Promise<Record<string, ColumnInfo[]>> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) {

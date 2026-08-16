@@ -15,8 +15,11 @@ export function buildPagination(params: PaginationParams): {
   offset: number;
   limit: number;
 } {
-  const page = Math.max(1, params.page);
-  const limit = Math.min(5000, Math.max(1, params.limit));
+  // L2: NaN từ Number('abc')/z.coerce — clamp về mặc định thay vì lan NaN.
+  const safePage = Number.isFinite(params.page) ? params.page : 1;
+  const safeLimit = Number.isFinite(params.limit) ? params.limit : 10;
+  const page = Math.max(1, safePage);
+  const limit = Math.min(5000, Math.max(1, safeLimit));
   return { offset: (page - 1) * limit, limit };
 }
 

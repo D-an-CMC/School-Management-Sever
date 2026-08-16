@@ -326,7 +326,12 @@ return success(result.data ?? []);
   }
 
   private async currentSemesterId(): Promise<number> {
-    const { data: list } = await supabase.from('semesters').select('semester_id').order('semester_id');
+    // H5: phải select is_active — trước đây thiếu cột nên luôn fallback về semester đầu tiên.
+    const { data: list } = await supabase
+      .from('semesters')
+      .select('semester_id, is_active')
+      .order('term_order')
+      .order('semester_id');
     const active = (list || []).find((s: any) => s.is_active === true);
     return active ? Number(active.semester_id) : (list && list.length > 0 ? Number(list[0].semester_id) : 1);
   }
@@ -849,6 +854,8 @@ if (weekStart) insert.week_start = weekStart;
   }
 
 // Remove any duplicate entries for this slot first, then insert
+// M7: chỉ xoá dòng CÙNG LOẠI (timetable_type_id) — trước đây việc lưu slot bình thường
+// vô tình xoá luôn Lịch thi đặt ở slot đó.
 if (periodNo) {
 const dupDelete = supabase
 .from('timetables')
@@ -856,7 +863,8 @@ const dupDelete = supabase
 .eq('class_id', data.classId)
 .eq('day_of_week', data.dayOfWeek)
 .eq('period_no', periodNo)
-.eq('semester_id', semId);
+.eq('semester_id', semId)
+.eq('timetable_type_id', data.timetableTypeId ?? 1);
 if (weekStart) {
   dupDelete.eq('week_start', weekStart);
 }
