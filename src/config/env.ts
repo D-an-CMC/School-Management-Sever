@@ -24,6 +24,7 @@ const envSchema = z.object({
   AI_MAX_HISTORY: z.coerce.number().default(30),
   AI_SQL_MAX_ROWS: z.coerce.number().default(200),
   AI_SQL_TIMEOUT_MS: z.coerce.number().default(8000),
+  AI_WRITE_MAX_ROWS: z.coerce.number().default(50),
   AI_RATE_LIMIT_PER_MIN: z.coerce.number().default(15),
   AI_HTTP_TIMEOUT_MS: z.coerce.number().default(300000),
 });

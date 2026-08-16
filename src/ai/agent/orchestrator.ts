@@ -26,7 +26,8 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
       };
     }
     if (parsed.rowCount != null) {
-      return { summary: `${parsed.rowCount} dòng`, data: parsed };
+      const action = parsed.ok && parsed.action ? `${String(parsed.action)} ${parsed.table}: ${parsed.rowCount} dòng` : `${parsed.rowCount} dòng`;
+      return { summary: action, data: parsed };
     }
     if (parsed.results && Array.isArray(parsed.results)) {
       return { summary: `${parsed.results.length} kết quả` };

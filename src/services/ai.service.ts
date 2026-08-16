@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { env } from '../config/env';
 import { ToolRegistry, ToolContext, UserRole } from '../ai/types';
 import { sqlTool } from '../ai/tools/sql.tool';
+import { writeSqlTool } from '../ai/tools/write.tool';
 import { dbSchemaTool } from '../ai/tools/schema.tool';
 import { ragTool } from '../ai/tools/rag.tool';
 import { runAgent } from '../ai/agent/orchestrator';
@@ -44,6 +45,7 @@ export class AiService {
   constructor() {
     this.registry = new ToolRegistry();
     this.registry.register(sqlTool);
+    this.registry.register(writeSqlTool);
     this.registry.register(dbSchemaTool);
     this.registry.register(ragTool);
   }
