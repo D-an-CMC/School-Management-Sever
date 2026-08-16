@@ -11,7 +11,7 @@ interface ColumnInfo {
   /** mô tả ngắn gọn để agent hiểu dữ liệu? không có — chỉ flag */
 }
 
-const ALL_TABLES = [
+export const ALL_TABLES = [
   'users',
   'roles',
   'students',

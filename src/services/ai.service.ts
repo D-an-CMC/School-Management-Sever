@@ -4,6 +4,7 @@ import { env } from '../config/env';
 import { ToolRegistry, ToolContext, UserRole } from '../ai/types';
 import { sqlTool } from '../ai/tools/sql.tool';
 import { writeSqlTool } from '../ai/tools/write.tool';
+import { listTablesTool, searchColumnsTool, readTableTool } from '../ai/tools/db-read.tool';
 import { dbSchemaTool } from '../ai/tools/schema.tool';
 import { ragTool } from '../ai/tools/rag.tool';
 import { runAgent } from '../ai/agent/orchestrator';
@@ -47,6 +48,9 @@ export class AiService {
     this.registry = new ToolRegistry();
     this.registry.register(sqlTool);
     this.registry.register(writeSqlTool);
+    this.registry.register(listTablesTool);
+    this.registry.register(searchColumnsTool);
+    this.registry.register(readTableTool);
     this.registry.register(dbSchemaTool);
     this.registry.register(ragTool);
   }

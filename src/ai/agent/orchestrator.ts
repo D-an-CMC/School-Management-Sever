@@ -37,6 +37,12 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
     if (parsed.error) {
       return { summary: `lỗi: ${String(parsed.error).slice(0, 120)}`, data: { error: String(parsed.error) } };
     }
+    if (parsed.table && Array.isArray(parsed.columns) && parsed.columns.some((c) => typeof c === 'object')) {
+      // read_table: {table, columns:[{name,...}], constraints:[], sample:{rows}}
+      const cons = Array.isArray(parsed.constraints) ? parsed.constraints.length : 0;
+      const sampleRows = parsed.sample?.rows?.length ?? 0;
+      return { summary: `${parsed.columns.length} cột, ${cons} ràng buộc, ${sampleRows} dòng mẫu` };
+    }
     if (parsed.columns) return { summary: `${parsed.columns.length} cột` };
   } catch {
     /* không phải JSON */
