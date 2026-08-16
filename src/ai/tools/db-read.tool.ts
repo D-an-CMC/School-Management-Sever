@@ -134,7 +134,12 @@ export const readTableTool: Tool = {
       let sql = `SELECT * FROM ${table}`;
       if (pred) sql = injectScope(sql, pred);
       sql = enforceLimit(sql, 3);
-      const res = await queryPool<Record<string, unknown>>(sql, ctx.role === 'Admin' ? [] : [ctx.userId, ctx.teacherId ?? 0]);
+      // Truyền đúng số placeholder thực tế (bảng public không có scope → 0 params)
+      const maxParam = (sql.match(/\$(\d+)/g) ?? [])
+        .map((m) => Number(m.slice(1)))
+        .reduce((a, b) => Math.max(a, b), 0);
+      const params = maxParam === 0 ? [] : [ctx.userId, ctx.teacherId ?? 0].slice(0, maxParam);
+      const res = await queryPool<Record<string, unknown>>(sql, params);
       const sampleCols = res.rows.length > 0 ? Object.keys(res.rows[0]) : [];
       sample = {
         columns: sampleCols,

@@ -17,6 +17,7 @@ const STUDENT_TABLES = new Set([
   'activity_participants',
   'notifications',
   'notification_recipients',
+  'student_year_results',
   ...PUBLIC_TABLES,
 ]);
 
@@ -104,6 +105,7 @@ const STUDENT_SCOPE: Record<string, string> = {
   activity_participants: `activity_participants.student_id IN ${S}`,
   notifications: `notifications.notification_id IN (SELECT notification_id FROM notification_recipients WHERE user_id = $1)`,
   notification_recipients: `notification_recipients.user_id = $1`,
+  student_year_results: `student_year_results.student_id IN ${S}`,
 };
 
 const TEACHER_SCOPE: Record<string, string> = {
@@ -271,7 +273,17 @@ export const sqlTool: Tool = {
     }
     finalSql = enforceLimit(finalSql, env.AI_SQL_MAX_ROWS);
 
-    const params = ctx.role === 'Admin' ? [] : [ctx.userId, ctx.teacherId ?? 0];
+    // Truyền đúng số tham số mà SQL thực sự dùng ($1, $2). TRƯỚC ĐÂY luôn truyền 2
+    // params với mọi role khác Admin → truy vấn chỉ vào bảng public (school_years...) 
+    // không có placeholder nào nhưng vẫn bind 2 params → "bind message supplies 2 
+    // parameters, but prepared statement requires 0".
+    const maxParam = (finalSql.match(/\$(\d+)/g) ?? [])
+      .map((m) => Number(m.slice(1)))
+      .reduce((a, b) => Math.max(a, b), 0);
+    const params =
+      ctx.role === 'Admin' || maxParam === 0
+        ? []
+        : [ctx.userId, ctx.teacherId ?? 0].slice(0, maxParam);
 
     const client = await getPool().connect();
     try {
