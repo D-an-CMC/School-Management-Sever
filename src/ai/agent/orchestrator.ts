@@ -1,6 +1,6 @@
 import { env } from '../../config/env';
 import { callChat } from '../llm/nim.client';
-import { ToolRegistry, ToolContext, LLMMessage, AgentResult, AgentStep } from '../types';
+import { ToolRegistry, ToolContext, LLMMessage, AgentResult, AgentStep, AgentStreamEvent } from '../types';
 
 interface RunOptions {
   systemPrompt: string;
@@ -8,6 +8,8 @@ interface RunOptions {
   history?: { role: string; content: string }[];
   registry: ToolRegistry;
   ctx: ToolContext;
+  /** Nhận sự kiện real-time để streaming lên UI (SSE) */
+  emit?: (event: AgentStreamEvent) => void;
 }
 
 function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { summary: string; data?: any } {
@@ -44,7 +46,7 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
 }
 
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
-  const { registry, ctx } = opts;
+  const { registry, ctx, emit } = opts;
   const tools = registry.toLLM();
 
   const messages: LLMMessage[] = [
@@ -92,6 +94,7 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
     if (resp.reasoning && resp.reasoning.trim().length > 0) {
       const thought = resp.reasoning.trim().replace(/\s+/g, ' ').slice(0, 800);
       steps.push({ tool: 'thought', summary: thought });
+      emit?.({ type: 'thought', summary: thought });
     }
 
     if (!resp.toolCalls || resp.toolCalls.length === 0) {
@@ -147,6 +150,17 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         tool: tool.name,
         summary: parsed.summary,
         data: data ? { ...data } : undefined,
+      });
+      emit?.({
+        type: 'tool',
+        tool: tool.name,
+        summary: parsed.summary,
+        data: data
+          ? {
+              ...data,
+              rows: Array.isArray(data.rows) ? data.rows.slice(0, 100) : undefined,
+            }
+          : undefined,
       });
 
       if (tool.name === 'rag_search') {

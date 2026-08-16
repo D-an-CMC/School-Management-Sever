@@ -42,6 +42,59 @@ router.post(
   }
 );
 
+// POST /api/ai/chat/stream — hỏi AI với server-sent events:
+// stream từng thought / tool call / done để UI hiển thị agent activity LIVE.
+router.post(
+  '/chat/stream',
+  authMiddleware,
+  aiRateLimitMiddleware,
+  async (req: AuthRequest, res) => {
+    const parsed = askSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json(error('Câu hỏi không hợp lệ.', 'INVALID_QUESTION'));
+    }
+    const user = req.user!;
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    res.write(`retry: 3000\n\n`);
+
+    const send = (event: any) => {
+      try {
+        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      } catch {
+        /* client đã đóng */
+      }
+    };
+
+    const onClose = () => {
+      res.end();
+    };
+    req.on('close', onClose);
+
+    try {
+      await aiService.askStream(
+        {
+          userId: user.userId,
+          role: user.role as any,
+          email: user.email,
+          name: (user as any).name,
+        },
+        { question: parsed.data.question as string, conversationId: parsed.data.conversationId },
+        send
+      );
+    } catch (e: any) {
+      if (!res.writableEnded) {
+        send({ type: 'error', message: e?.message ?? 'Lỗi AI service.' });
+      }
+    } finally {
+      if (!res.writableEnded) res.end();
+    }
+  }
+);
+
 // GET /api/ai/conversations — danh sách hội thoại của user
 router.get('/conversations', authMiddleware, async (req: AuthRequest, res) => {
   try {

@@ -20,7 +20,7 @@ const envSchema = z.object({
   AI_TEMPERATURE: z.coerce.number().default(0.2),
   AI_MAX_TOKENS: z.coerce.number().default(8192),
   AI_MAX_TOKENS_CAP: z.coerce.number().default(32768),
-  AI_MAX_TURNS: z.coerce.number().default(10),
+  AI_MAX_TURNS: z.coerce.number().default(25),
   AI_MAX_HISTORY: z.coerce.number().default(30),
   AI_SQL_MAX_ROWS: z.coerce.number().default(200),
   AI_SQL_TIMEOUT_MS: z.coerce.number().default(8000),

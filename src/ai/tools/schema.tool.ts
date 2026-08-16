@@ -4,6 +4,11 @@ import { Tool, ToolContext } from '../types';
 interface ColumnInfo {
   name: string;
   type: string;
+  /** true = cột tự sinh (identity) — KHÔNG được ghi trong INSERT */
+  auto?: boolean;
+  /** false = NOT NULL (bắt buộc khi INSERT) */
+  nullable: boolean;
+  /** mô tả ngắn gọn để agent hiểu dữ liệu? không có — chỉ flag */
 }
 
 const ALL_TABLES = [
@@ -50,8 +55,10 @@ async function fetchSchema(): Promise<Record<string, ColumnInfo[]>> {
   if (cache && Date.now() - cache.at < CACHE_TTL_MS) {
     return cache.data;
   }
-  const { rows } = await queryPool<{ table_name: string; column_name: string; data_type: string }>(
-    `SELECT table_name, column_name, data_type
+  const { rows } = await queryPool<
+    { table_name: string; column_name: string; data_type: string; is_identity: string; is_nullable: string }
+  >(
+    `SELECT table_name, column_name, data_type, is_identity, is_nullable
      FROM information_schema.columns
      WHERE table_schema = 'public'
      ORDER BY table_name, ordinal_position`
@@ -59,7 +66,12 @@ async function fetchSchema(): Promise<Record<string, ColumnInfo[]>> {
   const map: Record<string, ColumnInfo[]> = {};
   for (const r of rows) {
     if (!ALL_TABLES.includes(r.table_name)) continue;
-    (map[r.table_name] ??= []).push({ name: r.column_name, type: r.data_type });
+    (map[r.table_name] ??= []).push({
+      name: r.column_name,
+      type: r.data_type,
+      auto: r.is_identity === 'YES',
+      nullable: r.is_nullable === 'YES',
+    });
   }
   cache = { data: map, at: Date.now() };
   return map;
@@ -70,7 +82,8 @@ export interface DbSchemaTool extends Tool {}
 export const dbSchemaTool: DbSchemaTool = {
   name: 'get_db_schema',
   description:
-    'Trả về cấu trúc (tên bảng + cột) của cơ sở dữ liệu trường học ở dạng JSON. Gọi tool này TRƯỚC khi viết SQL để biết chính xác tên bảng, tên cột.',
+    `Trả về cấu trúc (bảng + cột) của cơ sở dữ liệu trường học dạng JSON. Mỗi cột có: name, type, nullable (false = bắt buộc), auto (true = cột tự sinh như *_id — KHÔNG ghi vào INSERT, hệ thống tự tạo). ` +
+    `Gọi tool này TRƯỚC khi viết SQL để biết chính xác tên bảng, tên cột.`,
   parameters: {
     type: 'object',
     properties: {

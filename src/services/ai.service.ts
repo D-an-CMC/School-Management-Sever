@@ -8,6 +8,7 @@ import { dbSchemaTool } from '../ai/tools/schema.tool';
 import { ragTool } from '../ai/tools/rag.tool';
 import { runAgent } from '../ai/agent/orchestrator';
 import { buildSystemPrompt } from '../ai/agent/prompts';
+import { AgentStreamEvent } from '../ai/types';
 import { queryPool } from '../config/pg';
 import {
   createConversation,
@@ -78,9 +79,11 @@ export class AiService {
     return ctx;
   }
 
-  async ask(
+  /** Chạy agent + lưu lịch sử; emit() nhận sự kiện real-time nếu dùng streaming. */
+  private async runCore(
     user: { userId: number; role: UserRole; email: string; name?: string },
-    input: AskInput
+    input: AskInput,
+    emit?: (e: AgentStreamEvent) => void
   ) {
     if (!input.question || !input.question.trim()) {
       throw new Error('Vui lòng nhập câu hỏi.');
@@ -114,6 +117,7 @@ export class AiService {
         history: historyForAgent,
         registry: this.registry,
         ctx,
+        emit,
       });
     } catch (e: any) {
       if (e instanceof NIMError || e?.message?.includes('NVIDIA')) {
@@ -147,6 +151,31 @@ export class AiService {
       role: user.role,
       userName: user.name,
     };
+  }
+
+  async ask(
+    user: { userId: number; role: UserRole; email: string; name?: string },
+    input: AskInput
+  ) {
+    return this.runCore(user, input);
+  }
+
+  /** Phiên bản streaming (SSE): emit từng sự kiện thought/tool/done khi xảy ra. */
+  async askStream(
+    user: { userId: number; role: UserRole; email: string; name?: string },
+    input: AskInput,
+    emit: (e: AgentStreamEvent) => void
+  ) {
+    const data = await this.runCore(user, input, emit);
+    emit({
+      type: 'done',
+      answer: data.answer,
+      steps: data.steps,
+      citations: data.citations,
+      warnings: data.warnings,
+      conversationId: data.conversationId,
+    });
+    return data;
   }
 
   async list(userId: number) {

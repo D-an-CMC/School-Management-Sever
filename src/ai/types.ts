@@ -90,3 +90,17 @@ export interface AgentResult {
   citations: { source_file: string; title: string; page_number?: number | null; chunk_index?: number }[];
   warnings: string[];
 }
+
+// Sự kiện phát trực tiếp (SSE) để UI hiển thị live agent activity
+export type AgentStreamEvent =
+  | { type: 'thought'; summary: string }
+  | { type: 'tool'; tool: string; summary: string; data?: AgentStepData }
+  | { type: 'error'; message: string }
+  | {
+      type: 'done';
+      answer: string;
+      steps: AgentStep[];
+      citations: AgentResult['citations'];
+      warnings: string[];
+      conversationId: number;
+    };
