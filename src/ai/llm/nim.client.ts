@@ -32,6 +32,8 @@ interface ChatCompletionsResponse {
   choices?: {
     message?: {
       content?: string | null;
+      reasoning_content?: string;
+      reasoning?: string;
       tool_calls?: LLMToolCall[];
     };
     finish_reason?: string;
@@ -120,6 +122,7 @@ export async function callChat(
 
     return {
       content: message?.content ?? '',
+      reasoning: message?.reasoning_content ?? message?.reasoning ?? undefined,
       toolCalls: message?.tool_calls ?? [],
       inputTokens: body.usage?.prompt_tokens ?? 0,
       outputTokens: body.usage?.completion_tokens ?? 0,

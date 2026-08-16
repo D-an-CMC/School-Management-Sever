@@ -87,6 +87,13 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
       maxTokens = Math.min(maxTokens * 2, env.AI_MAX_TOKENS_CAP);
     }
 
+    // Ghi lại "suy nghĩ" của AI (reasoning_content) thành step riêng biệt để
+    // frontend hiển thị dạng THOUGHT message.
+    if (resp.reasoning && resp.reasoning.trim().length > 0) {
+      const thought = resp.reasoning.trim().replace(/\s+/g, ' ').slice(0, 800);
+      steps.push({ tool: 'thought', summary: thought });
+    }
+
     if (!resp.toolCalls || resp.toolCalls.length === 0) {
       // Hoàn tất — trả lời cuối
       let answer = resp.content.trim();

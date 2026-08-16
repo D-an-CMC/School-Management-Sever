@@ -60,6 +60,7 @@ export interface LLMMessage {
 
 export interface LLMResponse {
   content: string;
+  reasoning?: string;
   toolCalls: LLMToolCall[];
   error?: string;
   inputTokens: number;
