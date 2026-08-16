@@ -160,12 +160,13 @@ function validateSelect(
   sqlRaw: string,
   role: string
 ): { ok: true } | { ok: false; reason: string } {
-  const sql = sqlRaw.trim();
+  // Cho phép dấu ";" kết thúc (model hay sinh "SELECT ... ;"), chỉ chặn ";" giữa câu
+  const sql = sqlRaw.trim().replace(/;\s*$/, '');
   if (!/^select\b/i.test(sql)) {
     return { ok: false, reason: 'Chỉ cho phép câu lệnh SELECT duy nhất.' };
   }
   if (HAS_SEMICOLON.test(sql)) {
-    return { ok: false, reason: 'Không được dùng dấu ";" — chỉ 1 lệnh SELECT.' };
+    return { ok: false, reason: 'Không được dùng dấu ";" ở giữa câu — chỉ 1 lệnh SELECT.' };
   }
   if (HAS_COMMENT.test(sql)) {
     return { ok: false, reason: 'Không được dùng comment SQL (-- hoặc /* */).' };
@@ -233,19 +234,19 @@ export const sqlTool: Tool = {
   name: 'execute_sql',
   description:
     `Chạy truy vấn SQL CHỈ ĐỌC (SELECT) trên cơ sở dữ liệu trường học và trả về kết quả dạng JSON. ` +
-    `Quy tắc: (1) gọi get_db_schema trước nếu chưa rõ tên bảng/cột; (2) chỉ viết 1 lệnh SELECT, không dùng ";" hay comment; ` +
+    `Quy tắc: (1) gọi get_db_schema trước nếu chưa rõ tên bảng/cột; (2) chỉ viết 1 lệnh SELECT, KHÔNG có dấu ";" hay comment; ` +
     `(3) KHÔNG dùng alias cho bảng, luôn tham chiếu đúng tên bảng (vd: students.full_name); ` +
     `(4) không dùng bảng ngoài danh sách được phép của vai trò của bạn — hệ thống tự ép phạm vi dữ liệu của bạn; ` +
     `(5) dùng WHERE cụ thể (không SELECT * toàn bộ bảng); (6) có thể dùng JOIN, GROUP BY, COUNT, AVG...`,
   parameters: {
     type: 'object',
     properties: {
-      query: { type: 'string', description: 'Câu lệnh SELECT hợp lệ (không có dấu ; cuối)' },
+      query: { type: 'string', description: 'Câu lệnh SELECT hợp lệ (không có dấu ;)' },
     },
     required: ['query'],
   },
   async execute(ctx: ToolContext, args: Record<string, any>): Promise<string> {
-    const query = String(args.query ?? '').trim();
+    const query = String(args.query ?? '').trim().replace(/;\s*$/, '');
     if (!query) return JSON.stringify({ error: 'Thiếu tham số query' });
 
     const check = validateSelect(query, ctx.role);

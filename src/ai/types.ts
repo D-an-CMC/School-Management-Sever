@@ -68,9 +68,19 @@ export interface LLMResponse {
   truncated: boolean;
 }
 
+export interface AgentStepData {
+  columns?: string[];
+  rows?: unknown[][];
+  rowCount?: number;
+  limited?: number;
+  sql?: string;
+  error?: string;
+}
+
 export interface AgentStep {
   tool: string;
   summary: string;
+  data?: AgentStepData;
 }
 
 export interface AgentResult {

@@ -10,19 +10,36 @@ interface RunOptions {
   ctx: ToolContext;
 }
 
-function summarizeToolResult(toolName: string, raw: string, maxLen = 220): string {
+function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { summary: string; data?: any } {
   try {
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed.rows)) return `${parsed.rows.length} dòng`;
-    if (parsed.rowCount != null) return `${parsed.rowCount} dòng`;
-    if (parsed.results && Array.isArray(parsed.results)) return `${parsed.results.length} kết quả`;
-    if (parsed.error) return `lỗi: ${String(parsed.error).slice(0, 120)}`;
-    if (parsed.columns) return `${parsed.columns.length} cột`;
+    if (Array.isArray(parsed.rows)) {
+      return {
+        summary: `${parsed.rows.length} dòng`,
+        data: {
+          columns: parsed.columns,
+          rows: parsed.rows,
+          rowCount: parsed.rowCount,
+          limited: parsed.limited,
+          sql: parsed.sql,
+        },
+      };
+    }
+    if (parsed.rowCount != null) {
+      return { summary: `${parsed.rowCount} dòng`, data: parsed };
+    }
+    if (parsed.results && Array.isArray(parsed.results)) {
+      return { summary: `${parsed.results.length} kết quả` };
+    }
+    if (parsed.error) {
+      return { summary: `lỗi: ${String(parsed.error).slice(0, 120)}`, data: { error: String(parsed.error) } };
+    }
+    if (parsed.columns) return { summary: `${parsed.columns.length} cột` };
   } catch {
     /* không phải JSON */
   }
   const trimmed = raw.replace(/\s+/g, ' ').trim();
-  return trimmed.length > maxLen ? trimmed.slice(0, maxLen) + '…' : trimmed;
+  return { summary: trimmed.length > maxLen ? trimmed.slice(0, maxLen) + '…' : trimmed };
 }
 
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {
@@ -97,10 +114,17 @@ export async function runAgent(opts: RunOptions): Promise<AgentResult> {
         result = JSON.stringify({ error: `Lỗi tool: ${e?.message ?? e}` });
       }
 
-      // Ghi lại steps + citations (từ rag_search)
+      // Ghi lại steps + citations (từ rag_search). steps.data chứa dữ liệu thật
+      // (columns/rows) để frontend render bảng/chart — giới hạn ≤ 100 dòng mỗi step.
+      const parsed = summarizeToolResult(tool.name, result);
+      const data = parsed.data;
+      if (data && Array.isArray(data.rows) && data.rows.length > 100) {
+        data.rows = data.rows.slice(0, 100);
+      }
       steps.push({
         tool: tool.name,
-        summary: summarizeToolResult(tool.name, result),
+        summary: parsed.summary,
+        data: data ? { ...data } : undefined,
       });
 
       if (tool.name === 'rag_search') {
