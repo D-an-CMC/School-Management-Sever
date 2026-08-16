@@ -7,6 +7,14 @@ import { writeSqlTool } from '../ai/tools/write.tool';
 import { listTablesTool, searchColumnsTool, readTableTool } from '../ai/tools/db-read.tool';
 import { dbSchemaTool } from '../ai/tools/schema.tool';
 import { ragTool } from '../ai/tools/rag.tool';
+import {
+  getCurrentContextTool,
+  getStudentReportTool,
+  getClassSummaryTool,
+  getAttendanceReportTool,
+  getScheduleTool,
+  getExamScheduleTool,
+} from '../ai/tools/insight.tool';
 import { runAgent } from '../ai/agent/orchestrator';
 import { buildSystemPrompt } from '../ai/agent/prompts';
 import { AgentStreamEvent } from '../ai/types';
@@ -53,6 +61,12 @@ export class AiService {
     this.registry.register(readTableTool);
     this.registry.register(dbSchemaTool);
     this.registry.register(ragTool);
+    this.registry.register(getCurrentContextTool);
+    this.registry.register(getStudentReportTool);
+    this.registry.register(getClassSummaryTool);
+    this.registry.register(getAttendanceReportTool);
+    this.registry.register(getScheduleTool);
+    this.registry.register(getExamScheduleTool);
   }
 
   async resolveUserContext(

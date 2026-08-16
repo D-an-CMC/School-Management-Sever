@@ -24,6 +24,7 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
           rowCount: parsed.rowCount,
           limited: parsed.limited,
           sql: parsed.sql,
+          ...(Array.isArray(parsed.subtables) ? { subtables: parsed.subtables } : {}),
         },
       };
     }
