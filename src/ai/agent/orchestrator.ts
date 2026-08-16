@@ -37,11 +37,52 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
     if (parsed.error) {
       return { summary: `lỗi: ${String(parsed.error).slice(0, 120)}`, data: { error: String(parsed.error) } };
     }
-    if (parsed.table && Array.isArray(parsed.columns) && parsed.columns.some((c) => typeof c === 'object')) {
-      // read_table: {table, columns:[{name,...}], constraints:[], sample:{rows}}
-      const cons = Array.isArray(parsed.constraints) ? parsed.constraints.length : 0;
-      const sampleRows = parsed.sample?.rows?.length ?? 0;
-      return { summary: `${parsed.columns.length} cột, ${cons} ràng buộc, ${sampleRows} dòng mẫu` };
+    // get_db_schema: {students: [...], classes: [...], ...} → danh sách bảng gọn
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const keys = Object.keys(parsed);
+      if (keys.length > 0 && keys.every((k) => Array.isArray(parsed[k]))) {
+        return {
+          summary: `${keys.length} bảng`,
+          data: {
+            columns: ['Bảng', 'Số cột'],
+            rows: keys.map((k) => [k, parsed[k].length]),
+            rowCount: keys.length,
+          },
+        };
+      }
+    }
+    // read_table: {table, columns:[{name,type,auto,nullable,default}], constraints:[...], sample}
+    if (parsed.table && Array.isArray(parsed.constraints)) {
+      const cols = Array.isArray(parsed.columns) ? (parsed.columns as any[]) : [];
+      const cons = (parsed.constraints as any[]) ?? [];
+      const sample = parsed.sample ?? {};
+      const sampleRows: unknown[][] = Array.isArray(sample.rows) ? sample.rows : [];
+      const subtables: any[] = [];
+      if (cons.length > 0) {
+        subtables.push({
+          title: 'Ràng buộc (PK / FK / UNIQUE)',
+          columns: ['Kiểu', 'Cột', 'Tham chiếu'],
+          rows: cons.map((c: any) => [c.type ?? '', c.column ?? '', c.refTable ? `${c.refTable}(${c.refColumn})` : '—']),
+        });
+      }
+      if (sample && Array.isArray(sample.columns) && sample.columns.length > 0) {
+        subtables.push({ title: 'Dữ liệu mẫu', columns: sample.columns, rows: sampleRows });
+      }
+      return {
+        summary: `${cols.length} cột, ${cons.length} ràng buộc, ${sampleRows.length} dòng mẫu`,
+        data: {
+          ...schemaColumnsTable(cols),
+          subtables,
+        },
+      };
+    }
+    // get_db_schema một bảng: {table, columns:[{name,type,auto,nullable}]} → bảng cột
+    if (parsed.table && Array.isArray(parsed.columns) && parsed.columns.some((c: any) => typeof c === 'object')) {
+      const cols = (parsed.columns as any[]).map((c: any) => ({ name: c.name, type: c.type, auto: c.auto, nullable: c.nullable }));
+      return {
+        summary: `bảng ${parsed.table}: ${cols.length} cột`,
+        data: schemaColumnsTable(cols),
+      };
     }
     if (parsed.columns) return { summary: `${parsed.columns.length} cột` };
   } catch {
@@ -49,6 +90,20 @@ function summarizeToolResult(toolName: string, raw: string, maxLen = 220): { sum
   }
   const trimmed = raw.replace(/\s+/g, ' ').trim();
   return { summary: trimmed.length > maxLen ? trimmed.slice(0, maxLen) + '…' : trimmed };
+}
+
+// Cột schema → bảng hiển thị gọn: Cột / Kiểu / Tự sinh / Bắt buộc
+function schemaColumnsTable(cols: { name?: string; type?: string; auto?: boolean; nullable?: boolean }[]): { columns: string[]; rows: unknown[][]; rowCount: number } {
+  return {
+    columns: ['Cột', 'Kiểu', 'Tự sinh', 'Bắt buộc'],
+    rows: cols.map((c) => [
+      String(c.name ?? ''),
+      String(c.type ?? ''),
+      c.auto ? 'có' : '—',
+      c.nullable === false ? 'có' : '—',
+    ]),
+    rowCount: cols.length,
+  };
 }
 
 export async function runAgent(opts: RunOptions): Promise<AgentResult> {

@@ -76,6 +76,8 @@ export interface AgentStepData {
   limited?: number;
   sql?: string;
   error?: string;
+  /** Bảng phụ (ràng buộc, dữ liệu mẫu...) hiển thị dưới bảng chính */
+  subtables?: { title: string; columns: string[]; rows: unknown[][] }[];
 }
 
 export interface AgentStep {
