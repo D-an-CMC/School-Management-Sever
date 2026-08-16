@@ -6,7 +6,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "node ./node_modules/typescript/lib/tsc.js",
     "start": "node dist/index.js",
-    "migrate": "node scripts/migrate.cjs"
+    "migrate": "node scripts/migrate.cjs",
+    "index-rag": "tsx scripts/index-rag.ts",
+    "test:ai": "tsx scripts/test-ai.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
@@ -21,11 +23,9 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.3",
     "zod": "^3.25.0"
-  },
-  "devDependencies": {
-    "pg": "^8.22.0"
   }
 }

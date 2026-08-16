@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes';
+import aiRoutes from './ai.routes';
 import usersRoutes from './users.routes';
 import studentsRoutes from './students.routes';
 import teachersRoutes from './teachers.routes';
@@ -22,6 +23,7 @@ import promotionEvaluationRoutes from './promotion-evaluation.routes';
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/ai', aiRoutes);
 router.use('/users', usersRoutes);
 router.use('/students', studentsRoutes);
 router.use('/teachers', teachersRoutes);

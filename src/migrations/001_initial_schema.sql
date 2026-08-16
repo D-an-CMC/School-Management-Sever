@@ -288,29 +288,7 @@ CREATE TABLE IF NOT EXISTS public.notification_recipients (
   CONSTRAINT notification_recipients_notification_id_fkey FOREIGN KEY (notification_id) REFERENCES public.notifications(notification_id)
 );
 
--- 23. Chatbot Conversations
-CREATE TABLE IF NOT EXISTS public.chatbot_conversations (
-  conversation_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  user_id bigint,
-  topic text,
-  started_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT chatbot_conversations_pkey PRIMARY KEY (conversation_id),
-  CONSTRAINT chatbot_conversations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(user_id)
-);
-
--- 24. Chatbot Messages
-CREATE TABLE IF NOT EXISTS public.chatbot_messages (
-  message_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
-  conversation_id bigint NOT NULL,
-  sender_type text,
-  message_content text,
-  intent text,
-  sent_at timestamp with time zone NOT NULL DEFAULT now(),
-  CONSTRAINT chatbot_messages_pkey PRIMARY KEY (message_id),
-  CONSTRAINT chatbot_messages_conversation_id_fkey FOREIGN KEY (conversation_id) REFERENCES public.chatbot_conversations(conversation_id)
-);
-
--- 25. Learning Predictions
+-- 23. Learning Predictions
 CREATE TABLE IF NOT EXISTS public.learning_predictions (
   prediction_id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   student_id bigint NOT NULL,
