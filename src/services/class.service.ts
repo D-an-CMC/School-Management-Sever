@@ -38,11 +38,30 @@ export class ClassService {
  }
 
  const classes = result.data ?? [];
+
+ // Đếm học sinh theo lớp dựa trên student_class_enrollments (nguồn lịch sử chuẩn),
+ // không dùng students.class_id (chỉ phản ánh lớp hiện tại, không giữ lịch sử theo năm).
+ const classIds = classes.map((c: any) => c.class_id).filter(Boolean);
+ let enrCountByClass = new Map<number, number>();
+ if (classIds.length > 0) {
+   let eq = supabase
+     .from('student_class_enrollments')
+     .select('class_id')
+     .in('class_id', classIds);
+   const currentYearId = params.schoolYearId !== undefined && params.schoolYearId > 0
+     ? params.schoolYearId
+     : (await supabase.from('school_years').select('school_year_id').eq('is_current', true).maybeSingle()).data?.school_year_id ?? null;
+   if (currentYearId != null) eq = eq.eq('school_year_id', currentYearId);
+   const { data: enrRows } = await eq;
+   enrCountByClass = new Map<number, number>();
+   (enrRows ?? []).forEach((r: any) => {
+     const cid = Number(r.class_id);
+     enrCountByClass.set(cid, (enrCountByClass.get(cid) ?? 0) + 1);
+   });
+ }
+
  const enriched = await Promise.all(classes.map(async (c: any) => {
- const { count: studentCount } = await supabase
- .from('students')
- .select('*', { count: 'exact', head: true })
- .eq('class_id', c.class_id);
+ const studentCount = enrCountByClass.get(Number(c.class_id)) ?? 0;
 
  let teacherName = '';
  if (c.homeroom_teacher_id) {
@@ -81,30 +100,52 @@ export class ClassService {
  return error('Không tìm thấy lớp học', 'NOT_FOUND');
  }
 
- const studentsResult = await supabase
- .from('students')
- .select('student_id, student_code, full_name, gender, date_of_birth')
- .eq('class_id', classId)
- .order('full_name');
+ // Lấy học sinh của lớp theo năm học (student_class_enrollments là nguồn chuẩn).
+ const yearId = data.school_year_id ?? null;
+ const studentsResult = await this.getStudentsByEnrollment(classId, yearId);
 
  return success({
  ...data,
- students: studentsResult.data ?? [],
+ students: studentsResult ?? [],
  });
  }
 
  async getStudents(classId: number) {
  const result = await supabase
- .from('students')
- .select('*')
+ .from('classes')
+ .select('school_year_id')
  .eq('class_id', classId)
- .order('full_name');
+ .maybeSingle();
 
- if (result.error) {
- return error(result.error.message, 'DB_ERROR');
+ const yearId = result.data?.school_year_id ?? null;
+ const students = await this.getStudentsByEnrollment(classId, yearId);
+
+ if (students === null) {
+   return error('Lỗi truy vấn học sinh', 'DB_ERROR');
+ }
+ return success(students);
  }
 
- return success(result.data ?? []);
+ // Lấy danh sách học sinh của một lớp trong một năm học qua enrollment.
+ private async getStudentsByEnrollment(classId: number, schoolYearId: number | null): Promise<any[] | null> {
+   let enr = supabase
+     .from('student_class_enrollments')
+     .select('student_id')
+     .eq('class_id', classId);
+   if (schoolYearId != null) enr = enr.eq('school_year_id', schoolYearId);
+   const { data: enrRows, error } = await enr;
+   if (error) return null;
+
+   const studentIds = (enrRows ?? []).map((r: any) => r.student_id);
+   if (studentIds.length === 0) return [];
+
+   const { data: students, error: stErr } = await supabase
+     .from('students')
+     .select('student_id, student_code, full_name, gender, date_of_birth, class_id, status')
+     .in('student_id', studentIds)
+     .order('full_name');
+   if (stErr) return null;
+   return students ?? [];
  }
 
  async getGradeStats(schoolYearId?: number) {
@@ -116,11 +157,20 @@ export class ClassService {
 
  if (classError) return error(classError.message, 'DB_ERROR');
 
- const { data: students, error: studentError } = await supabase
- .from('students')
- .select('student_id, class_id');
+ // Đếm học sinh theo lớp từ enrollments (theo năm học), không dùng students.class_id.
+ const classIds = (classes || []).map((c: any) => c.class_id).filter(Boolean);
+ const classYearMap = new Map<number, number>();
+ (classes || []).forEach((c: any) => {
+   if (c.class_id != null) classYearMap.set(c.class_id, c.school_year_id);
+ });
 
- if (studentError) return error(studentError.message, 'DB_ERROR');
+ const { data: enrRows, error: enrError } = classIds.length
+   ? await supabase
+       .from('student_class_enrollments')
+       .select('class_id, school_year_id')
+       .in('class_id', classIds)
+   : { data: [], error: null };
+ if (enrError) return error(enrError.message, 'DB_ERROR');
 
  const classGradeMap = new Map<number, number>();
  (classes || []).forEach((c: any) => {
@@ -135,10 +185,13 @@ export class ClassService {
  gradeMap.get(gl)!.class_count++;
  });
 
- (students || []).forEach((s: any) => {
- const gl = classGradeMap.get(s.class_id);
- if (gl == null) return;
- gradeMap.get(gl)!.student_count++;
+ (enrRows || []).forEach((r: any) => {
+   // Chỉ đếm enrollment thuộc đúng năm học của lớp đang thống kê.
+   const yearId = classYearMap.get(Number(r.class_id));
+   if (yearId != null && Number(r.school_year_id) !== Number(yearId)) return;
+   const gl = classGradeMap.get(Number(r.class_id));
+   if (gl == null) return;
+   gradeMap.get(gl)!.student_count++;
  });
 
  const result = Array.from(gradeMap.entries())
