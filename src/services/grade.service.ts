@@ -9,6 +9,33 @@ function isScoredSubject(subjectId?: number): boolean {
 	return !NON_SCORED_SUBJECT_IDS.has(Number(subjectId));
 }
 
+// Lấy học sinh của lớp theo năm học (student_class_enrollments là nguồn lịch sử chuẩn),
+// không dùng students.class_id (chỉ phản ánh lớp hiện tại, không giữ lịch sử theo năm).
+async function getStudentsByClass(classId: number): Promise<any[]> {
+	const { data: cls } = await supabase
+		.from('classes')
+		.select('school_year_id')
+		.eq('class_id', classId)
+		.maybeSingle();
+
+	let enr = supabase
+		.from('student_class_enrollments')
+		.select('student_id')
+		.eq('class_id', classId);
+	if (cls?.school_year_id != null) enr = enr.eq('school_year_id', cls.school_year_id);
+	const { data: enrRows } = await enr;
+
+	const studentIds = (enrRows ?? []).map((r: any) => r.student_id);
+	if (studentIds.length === 0) return [];
+
+	const { data: students } = await supabase
+		.from('students')
+		.select('student_id, student_code, full_name')
+		.in('student_id', studentIds)
+		.order('full_name');
+	return students ?? [];
+}
+
 async function resolveSemesterId(semesterId?: number): Promise<number> {
 	if (semesterId) return semesterId;
 
@@ -46,11 +73,7 @@ export class GradeService {
 			return this.findByClassYear(classId, subjectId);
 		}
 
-		const { data: students } = await supabase
-			.from('students')
-			.select('student_id, student_code, full_name')
-			.eq('class_id', classId)
-			.order('full_name');
+		const students = await getStudentsByClass(classId);
 
 		if (!students || students.length === 0) {
 			return success([]);
@@ -168,11 +191,7 @@ export class GradeService {
 
 	// Aggregate the whole school year: combines HK I + HK II scores.
 	async findByClassYear(classId: number, subjectId?: number) {
-		const { data: students } = await supabase
-			.from('students')
-			.select('student_id, student_code, full_name')
-			.eq('class_id', classId)
-			.order('full_name');
+		const students = await getStudentsByClass(classId);
 
 		if (!students || students.length === 0) {
 			return success([]);
