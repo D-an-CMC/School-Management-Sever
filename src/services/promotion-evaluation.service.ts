@@ -222,9 +222,11 @@ export class PromotionEvaluationService {
       promotion_status: status,
       attendance_warning: attendance.warning,
       system_recommendation: recommendation,
+      // Luôn áp dụng đề xuất của hệ thống vào kết quả cuối.
+      final_result: recommendation,
     };
 
-    // Upsert theo unique (student_id, school_year_id); giữ nguyên final_result đã duyệt.
+    // Upsert theo unique (student_id, school_year_id); final_result luôn được cập nhật theo đề xuất.
     const { data: existing } = await supabase
       .from('student_year_results')
       .select('result_id')
@@ -264,13 +266,25 @@ export class PromotionEvaluationService {
 
     if (!students || students.length === 0) return error('Lớp không có học sinh', 'EMPTY');
 
+    // Chạy song song với giới hạn concurrency để rút ngắn thời gian mà không làm
+    // quá tải Supabase (mỗi học sinh thực hiện nhiều query học tập + điểm danh).
+    const CONCURRENCY = 8;
     const rows: any[] = [];
     const errors: string[] = [];
-    for (const s of students) {
-      const r = await this.evaluateStudent(s.student_id, yearId);
-      if (r.success) rows.push(r.data);
-      else errors.push(`Học sinh ${s.student_id}: ${(r as any).error}`);
+    let idx = 0;
+
+    async function worker() {
+      while (idx < students.length) {
+        const s = students[idx++];
+        const r = await this.evaluateStudent(s.student_id, yearId);
+        if (r.success) rows.push(r.data);
+        else errors.push(`Học sinh ${s.student_id}: ${(r as any).error}`);
+      }
     }
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, students.length) }, () => worker.call(this))
+    );
 
     if (errors.length > 0) return error(errors.join('; '), 'PARTIAL_FAILURE');
     return success({ evaluated: rows.length, rows });
@@ -382,15 +396,14 @@ export class PromotionEvaluationService {
       }
     }
 
-    // Số bản ghi đã TÍNH (có trong student_year_results, chưa hẳn duyệt) theo lớp.
-    const computedByClass = new Map<number, number>();
-    // Số bản ghi đã XÉT XONG (finalized = true) theo lớp.
+    // Số bản ghi đã có KẾT QUẢ CUỐI (final_result khác null = đã xét/chốt) theo lớp.
     const evaluatedByClass = new Map<number, number>();
     if (classIds.length > 0) {
       const { data: allResults } = await supabase
         .from('student_year_results')
-        .select('student_id, school_year_id, finalized')
-        .eq('school_year_id', yearId);
+        .select('student_id, school_year_id, final_result')
+        .eq('school_year_id', yearId)
+        .not('final_result', 'is', null);
 
       // Map student -> class từ bảng students (chỉ trong năm này).
       const classOfStudent = new Map<number, number>();
@@ -412,24 +425,20 @@ export class PromotionEvaluationService {
         seen.add(r.student_id);
         const cid = classOfStudent.get(r.student_id);
         if (cid == null) continue;
-        computedByClass.set(cid, (computedByClass.get(cid) || 0) + 1);
-        if (r.finalized) {
-          evaluatedByClass.set(cid, (evaluatedByClass.get(cid) || 0) + 1);
-        }
+        evaluatedByClass.set(cid, (evaluatedByClass.get(cid) || 0) + 1);
       }
     }
 
     // Chi tiết từng lớp.
     const classesDetail = classList.map((c: any) => {
       const total = studentCountByClass.get(c.class_id) || 0;
-      const computed = computedByClass.get(c.class_id) || 0;
       const evaluated = evaluatedByClass.get(c.class_id) || 0;
       return {
         class_id: c.class_id,
         class_name: c.class_name,
         grade_level: c.grade_level,
         total_students: total,
-        computed_students: computed,
+        computed_students: evaluated,
         evaluated_students: evaluated,
         done: total > 0 && evaluated >= total,
         pending: total > 0 && evaluated < total,
@@ -443,7 +452,8 @@ export class PromotionEvaluationService {
     const { data: rows } = await supabase
       .from('student_year_results')
       .select('award, promotion_status, academic_result, attendance_warning')
-      .eq('school_year_id', yearId);
+      .eq('school_year_id', yearId)
+      .not('final_result', 'is', null);
 
     const awardCounts: Record<string, number> = {};
     const promoCounts: Record<string, number> = {};

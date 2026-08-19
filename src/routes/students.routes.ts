@@ -32,7 +32,8 @@ router.get('/unassigned/count', roleMiddleware(['Admin', 'GiaoVien']), async (_r
     const { count, error } = await supabase
       .from('students')
       .select('student_id', { count: 'exact', head: true })
-      .is('class_id', null);
+      .is('class_id', null)
+      .neq('status', 'GRADUATED');
     if (error) return res.status(400).json({ success: false, error: error.message });
     return res.json({ success: true, data: { unassignedCount: count ?? 0 } });
   } catch (err: any) {

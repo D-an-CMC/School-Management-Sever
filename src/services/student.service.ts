@@ -32,7 +32,7 @@ export class StudentService {
         const { data: c } = await supabase.from('classes').select('class_name, grade_level').eq('class_id', s.class_id).maybeSingle();
         if (c) { className = c.class_name || ''; if (c.grade_level) s.grade_level = c.grade_level; }
       }
-      return { ...s, email, phone, class_name: className, grade_level: s.grade_level, status: 'active' };
+      return { ...s, email, phone, class_name: className, grade_level: s.grade_level };
     }));
 
     return {
