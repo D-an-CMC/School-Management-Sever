@@ -41,6 +41,27 @@ router.get('/classes', roleMiddleware(['Admin']), async (req: any, res) => {
   }
 });
 
+router.post('/semesters', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const body = z.object({
+      yearId: z.coerce.number(),
+      hk1Start: z.string().nullable().optional(),
+      hk1End: z.string().nullable().optional(),
+      hk2Start: z.string().nullable().optional(),
+      hk2End: z.string().nullable().optional(),
+    }).parse(req.body);
+    const result = await yearTransitionService.createSemesters(body.yearId, {
+      hk1Start: body.hk1Start,
+      hk1End: body.hk1End,
+      hk2Start: body.hk2Start,
+      hk2End: body.hk2End,
+    });
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
+  }
+});
+
 router.post('/apply', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const body = z.object({
@@ -52,15 +73,48 @@ router.post('/apply', roleMiddleware(['Admin']), async (req: any, res) => {
         class_id: z.coerce.number().nullable().optional(),
         grade_level: z.coerce.number().nullable().optional(),
       })).optional().default([]),
+      hk1Start: z.string().nullable().optional(),
+      hk1End: z.string().nullable().optional(),
+      hk2Start: z.string().nullable().optional(),
+      hk2End: z.string().nullable().optional(),
     }).parse(req.body);
     const result = await yearTransitionService.applyTransition(
       body.fromYearId,
       body.toYearId,
-      body.decisions
+      body.decisions,
+      {
+        hk1Start: body.hk1Start,
+        hk1End: body.hk1End,
+        hk2Start: body.hk2Start,
+        hk2End: body.hk2End,
+      }
     );
     return res.json(result);
   } catch (err: any) {
     return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
+  }
+});
+
+router.post('/revert', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const { fromYearId, toYearId } = z.object({
+      fromYearId: z.coerce.number(),
+      toYearId: z.coerce.number(),
+    }).parse(req.body);
+    const result = await yearTransitionService.revertTransition(fromYearId, toYearId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/clear', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const { yearId } = z.object({ yearId: z.coerce.number() }).parse(req.body);
+    const result = await yearTransitionService.clearYear(yearId);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
   }
 });
 

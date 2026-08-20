@@ -1,6 +1,14 @@
 import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 
+// Gộp xếp loại "Đạt/Chưa đạt" của 2 học kỳ: nếu 1 kỳ "Chưa đạt" thì cả năm là
+// "Chưa đạt" (không để HK2 đang "Đạt" ghi đè quyết định của HK1).
+function combineRanking(r1: string | null | undefined, r2: string | null | undefined): string {
+  if (r1 === 'Chưa đạt' || r2 === 'Chưa đạt') return 'Chưa đạt';
+  if (r1 === 'Đạt' || r2 === 'Đạt') return 'Đạt';
+  return r2 || r1 || '';
+}
+
 export class StudentSelfService {
   private async ensureStudent(userId: number) {
     let { data: student } = await supabase
@@ -330,7 +338,7 @@ export class StudentSelfService {
         yearAvg,
         ranking1,
         ranking2,
-        ranking: ranking2 || ranking1 || '',
+        ranking: combineRanking(ranking1, ranking2),
       };
     });
 

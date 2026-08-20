@@ -29,7 +29,9 @@ const WEIGHT_CK = 3;
 
 interface GradeTypeInfo { grade_type_id: number; type_code?: string; type_name?: string }
 
+let gradeTypeIdsCache: { tx: number; gk: number; ck: number } | null = null;
 async function getGradeTypeIds(): Promise<{ tx: number; gk: number; ck: number }> {
+  if (gradeTypeIdsCache) return gradeTypeIdsCache;
   const { data } = await supabase.from('grade_types').select('grade_type_id, type_code, type_name');
   const list: GradeTypeInfo[] = data ?? [];
 
@@ -43,7 +45,116 @@ async function getGradeTypeIds(): Promise<{ tx: number; gk: number; ck: number }
   const gk = match('GK', 'giữa') || list[1] || tx;
   const ck = match('CK', 'cuối') || list[2] || gk;
 
-  return { tx: tx?.grade_type_id ?? 1, gk: gk?.grade_type_id ?? 2, ck: ck?.grade_type_id ?? 3 };
+  gradeTypeIdsCache = { tx: tx?.grade_type_id ?? 1, gk: gk?.grade_type_id ?? 2, ck: ck?.grade_type_id ?? 3 };
+  return gradeTypeIdsCache;
+}
+
+// Tính TBMôn từ grade_items (không query, dùng dữ liệu đã nạp).
+function scoreFromItems(items: any[]): number | null {
+  if (!items || items.length === 0) return null;
+  const { tx, gk, ck } = gradeTypeIdsCache!;
+  let sum = 0, count = 0;
+  for (const it of items) {
+    const score = Number(it.score);
+    if (isNaN(score)) continue;
+    if (it.grade_type_id === tx) { sum += score * WEIGHT_TX; count += WEIGHT_TX; }
+    else if (it.grade_type_id === gk) { sum += score * WEIGHT_GK; count += WEIGHT_GK; }
+    else if (it.grade_type_id === ck) { sum += score * WEIGHT_CK; count += WEIGHT_CK; }
+    else { sum += score * WEIGHT_TX; count += WEIGHT_TX; }
+  }
+  if (count === 0) return null;
+  return sum / count;
+}
+
+// Tính Điểm TBCN cho nhiều học sinh cùng lúc bằng 3 query gộp (tránh N+1).
+// Trả về Map<student_id, avg|null>.
+async function computeYearAvgsBulk(studentIds: number[], yearId: number): Promise<Map<number, number | null>> {
+  const result = new Map<number, number | null>();
+  if (studentIds.length === 0) return result;
+  await getGradeTypeIds();
+
+  const studentSet = new Set(studentIds);
+
+  const { data: sems } = await supabase
+    .from('semesters')
+    .select('semester_id')
+    .eq('school_year_id', yearId)
+    .order('term_order', { ascending: true });
+  const semIds = (sems ?? []).map((s: any) => s.semester_id);
+  if (semIds.length === 0) return result;
+
+  // Nạp toàn bộ subject_results của các HS trong năm (result_id giảm dần để lấy bản mới nhất).
+  // Phân trang bằng range() vì Supabase giới hạn 1000 rows/query. Chạy song song các trang.
+  const queries: any[] = [];
+  for (const semesterId of semIds) {
+    const PAGE = 900;
+    const { count } = await supabase
+      .from('subject_results')
+      .select('result_id', { count: 'exact', head: true })
+      .eq('semester_id', semesterId);
+    const pages = Math.ceil((count ?? 0) / PAGE);
+    for (let offset = 0; offset < pages * PAGE; offset += PAGE) {
+      queries.push(
+        supabase
+          .from('subject_results')
+          .select('result_id, student_id, subject_id, semester_id')
+          .eq('semester_id', semesterId)
+          .order('result_id', { ascending: false })
+          .range(offset, offset + PAGE - 1)
+      );
+    }
+  }
+  const chunkResults = await Promise.all(queries);
+  const allResults = chunkResults.flatMap((r: any) => r.data ?? []);
+  const results = allResults.filter((r: any) => studentSet.has(Number(r.student_id)));
+
+  // result mới nhất cho mỗi (student, subject, semester) — lấy max result_id.
+  const resultIds = Array.from(new Set((results ?? []).map((r: any) => r.result_id)));
+  const itemsByResultId = new Map<number, any[]>();
+  if (resultIds.length > 0) {
+    const PAGE = 900;
+    const itemQueries: any[] = [];
+    for (let offset = 0; offset < resultIds.length; offset += PAGE) {
+      const chunk = resultIds.slice(offset, offset + PAGE);
+      itemQueries.push(
+        supabase
+          .from('grade_items')
+          .select('result_id, score, grade_type_id')
+          .in('result_id', chunk)
+      );
+    }
+    const itemChunks = await Promise.all(itemQueries);
+    for (const it of itemChunks.flatMap((r: any) => r.data ?? [])) {
+      if (!itemsByResultId.has(it.result_id)) itemsByResultId.set(it.result_id, []);
+      itemsByResultId.get(it.result_id)!.push(it);
+    }
+  }
+
+  // Map key `${student}|${subject}|${semester}` -> score (chỉ giữ bản ghi result_id cao nhất).
+  const scoreByKey = new Map<string, number | null>();
+  for (const r of results ?? []) {
+    const key = `${r.student_id}|${r.subject_id}|${r.semester_id}`;
+    const score = scoreFromItems(itemsByResultId.get(r.result_id) ?? []);
+    if (!scoreByKey.has(key)) scoreByKey.set(key, score); // result_ids tăng dần -> giữ bản ghi mới nhất
+  }
+
+  for (const studentId of studentIds) {
+    const { data: allResults } = results
+      ? { data: (results ?? []).filter((r: any) => Number(r.student_id) === studentId) }
+      : { data: [] };
+    const subjectIds = Array.from(new Set(allResults.map((r: any) => r.subject_id)));
+    let sum = 0, count = 0;
+    for (const subjId of subjectIds) {
+      const avg1 = scoreByKey.get(`${studentId}|${subjId}|${semIds[0]}`) ?? null;
+      const avg2 = semIds[1] ? (scoreByKey.get(`${studentId}|${subjId}|${semIds[1]}`) ?? null) : null;
+      let yearAvg: number | null = null;
+      if (avg1 != null && avg2 != null) yearAvg = (avg1 + avg2 * 2) / 3;
+      else yearAvg = avg2 ?? avg1;
+      if (yearAvg != null) { sum += yearAvg; count += 1; }
+    }
+    result.set(studentId, count === 0 ? null : Number((sum / count).toFixed(2)));
+  }
+  return result;
 }
 
 // Điểm TB môn trong một học kỳ: (ΣTX*1 + GK*2 + CK*3) / (nTX*1 + 2 + 3)
@@ -191,30 +302,21 @@ async function yearResultStatusByStudent(yearId: number): Promise<Map<number, st
   return map;
 }
 
-// Tìm lớp mới của toYear theo khối + chữ lớp (vd 6A -> 7A).
-async function findTargetClass(toYearId: number, gradeLevel: number | null, suffix: string): Promise<number | null> {
-  if (!suffix || gradeLevel == null) return null;
-  const { data: classes } = await supabase
-    .from('classes')
-    .select('class_id, class_name, grade_level')
-    .eq('school_year_id', toYearId);
-  for (const c of classes ?? []) {
-    if (c.grade_level === gradeLevel && classSuffix(c.class_name) === suffix) {
-      return c.class_id;
-    }
-  }
-  return null;
-}
-
 async function getYearById(yearId: number) {
   const { data } = await supabase.from('school_years').select('*').eq('school_year_id', yearId).maybeSingle();
   return data;
 }
 
 // Tạo 2 học kỳ (HK1/HK2) cho năm học nếu chưa có — dữ liệu bắt buộc cho
-// gradebook/timetable/sự kiện của năm mới. HK1: từ start_date → 14/01 năm sau;
-// HK2: 15/01 → end_date.
-async function ensureSemesters(yearId: number) {
+// gradebook/timetable/sự kiện của năm mới. Có thể truyền ngày user nhập
+// (hk1Start/hk1End/hk2Start/hk2End); nếu thiếu, tự suy: HK1 từ start_date → 14/01
+// năm sau; HK2: 15/01 → end_date.
+async function ensureSemesters(yearId: number, opts?: {
+  hk1Start?: string | null;
+  hk1End?: string | null;
+  hk2Start?: string | null;
+  hk2End?: string | null;
+}) {
   if (!yearId) return;
   const { data: existing } = await supabase
     .from('semesters')
@@ -230,21 +332,24 @@ async function ensureSemesters(yearId: number) {
 
   const start = year?.start_date ? new Date(year.start_date) : null;
   const end = year?.end_date ? new Date(year.end_date) : null;
-  const hk1End = start ? new Date(start.getTime()) : null;
-  // H9: setMonth(0,14) chỉ đổi tháng/ngày TRONG năm hiện tại — phải vượt sang năm sau
-  // (HK1 đặt 14/01 của năm kế tiếp, vì HK1 nằm ở cuối năm học cũ).
-  if (hk1End) {
+  const hk1End = opts?.hk1End
+    ? new Date(opts.hk1End)
+    : (start ? new Date(start.getTime()) : null);
+  if (!opts?.hk1End && hk1End) {
+    // Mặc định HK1 kết thúc 14/01 của năm kế tiếp.
     hk1End.setFullYear(start!.getFullYear() + 1);
     hk1End.setMonth(0, 14);
   }
-  const hk2Start = hk1End ? new Date(hk1End.getTime() + 86400000) : null; // 15/01
+  const hk2Start = opts?.hk2Start
+    ? new Date(opts.hk2Start)
+    : (hk1End ? new Date(hk1End.getTime() + 86400000) : null);
 
   await supabase.from('semesters').insert([
     {
       school_year_id: yearId,
       semester_name: 'Học kỳ 1',
       term_order: 1,
-      start_date: start,
+      start_date: opts?.hk1Start ? new Date(opts.hk1Start) : start,
       end_date: hk1End,
       is_active: true,
     },
@@ -253,7 +358,7 @@ async function ensureSemesters(yearId: number) {
       semester_name: 'Học kỳ 2',
       term_order: 2,
       start_date: hk2Start,
-      end_date: end,
+      end_date: opts?.hk2End ? new Date(opts.hk2End) : end,
       is_active: false,
     },
   ]);
@@ -336,13 +441,27 @@ export class YearTransitionService {
     // Trạng thái xét cuối năm (dựa trên student_year_results).
     const yearStatusByStudent = await yearResultStatusByStudent(fromYearId);
 
+    // Điểm TBCN cho toàn bộ HS — tính gộp một lần (tránh N+1).
+    const studentIds = students.map((s: any) => Number(s.student_id));
+    const avgByStudent = await computeYearAvgsBulk(studentIds, fromYearId);
+
+    // Nạp lớp năm đích một lần để tra cứu trong bộ nhớ (tránh N+1 query findTargetClass).
+    const { data: targetClasses } = await supabase
+      .from('classes')
+      .select('class_id, class_name, grade_level')
+      .eq('school_year_id', toYearId);
+    const targetByKey = new Map<string, number>();
+    for (const c of targetClasses ?? []) {
+      targetByKey.set(`${c.grade_level}_${classSuffix(c.class_name)}`, c.class_id);
+    }
+
     const rows = await Promise.all(students.map(async (s: any) => {
       const yearStatus = yearStatusByStudent.get(Number(s.student_id));
-      let avgScore: number | null = null;
+      // Luôn tính điểm TBCN để hiển thị đầy đủ.
+      const avgScore = avgByStudent.get(Number(s.student_id)) ?? null;
       let suggestion;
       if (yearStatus == null) {
-        // Chưa có kết quả xét cuối năm: dựa trên điểm TBCN thực tế (computeYearAvg).
-        avgScore = await computeYearAvg(Number(s.student_id), fromYearId);
+        // Chưa có kết quả xét cuối năm: dựa trên điểm TBCN thực tế.
         suggestion = suggestStatus(s.grade_level, avgScore);
       } else {
         suggestion = statusFromYearResult(s.grade_level, yearStatus);
@@ -352,9 +471,11 @@ export class YearTransitionService {
 
       let suggestedClassId: number | null = null;
       if (suggestion.status === 'PROMOTED') {
-        suggestedClassId = await findTargetClass(toYearId, suggestion.nextGrade!, suffix);
+        suggestedClassId = suggestion.nextGrade != null
+          ? (targetByKey.get(`${suggestion.nextGrade}_${suffix}`) ?? null)
+          : null;
       } else if (suggestion.status === 'RETAINED') {
-        suggestedClassId = await findTargetClass(toYearId, s.grade_level, suffix);
+        suggestedClassId = targetByKey.get(`${s.grade_level}_${suffix}`) ?? null;
       }
 
       return {
@@ -428,9 +549,15 @@ export class YearTransitionService {
         if (!cur || y > Number(cur.school_year_id)) roomByKey.set(key, c);
       }
     }
+    // GVCN "theo học sinh lên lớp": lớp mới {grade}{suffix} lấy GVCN của lớp cũ
+    // {grade-1}{suffix} (cùng chữ, khối kế trước). Lớp 6 mới (đầu cấp) -> null.
+    // Phòng cố định: giữ theo cùng khối {grade}{suffix} của năm cũ.
     const metaFor = (grade: number, className: string) => {
-      const key = `${grade}_${className.replace(/^\d/, '')}`;
-      return { homeroom: homeroomByKey.get(key) ?? null, room: roomByKey.get(key) ?? null };
+      const suffix = className.replace(/^\d/, '');
+      const roomKey = `${grade}_${suffix}`;
+      // Lớp 6 mới không có GVCN kế thừa.
+      const homeroom = grade > 6 ? homeroomByKey.get(`${grade - 1}_${suffix}`) ?? null : null;
+      return { homeroom, room: roomByKey.get(roomKey) ?? null };
     };
 
     for (const grade of GRADE_LEVELS) {
@@ -478,7 +605,17 @@ export class YearTransitionService {
   // Phân lớp học sinh vào toYear.
   // decisions: [{student_id, status, class_id}] — chỉ cần cho học sinh cần quyết định (avg < 5).
   // Học sinh không nằm trong decisions sẽ tự động xử lý (lên lớp / tốt nghiệp).
-  async applyTransition(fromYearId: number, toYearId: number, decisions: any[]) {
+  async applyTransition(
+    fromYearId: number,
+    toYearId: number,
+    decisions: any[],
+    semesterOpts?: {
+      hk1Start?: string | null;
+      hk1End?: string | null;
+      hk2Start?: string | null;
+      hk2End?: string | null;
+    }
+  ) {
     if (!fromYearId || !toYearId) {
       return error('Thiếu fromYearId / toYearId', 'VALIDATION_ERROR');
     }
@@ -504,9 +641,14 @@ export class YearTransitionService {
     // H7b: decisions gửi class_id tuỳ ý — chỉ chấp nhận lớp THUỘC năm đích.
     const { data: targetYearClasses } = await supabase
       .from('classes')
-      .select('class_id')
+      .select('class_id, class_name, grade_level')
       .eq('school_year_id', toYearId);
     const validTargetClassIds = new Set((targetYearClasses ?? []).map((c: any) => Number(c.class_id)));
+    // Tra cứu lớp đích trong bộ nhớ (tránh N+1 query findTargetClass trong worker).
+    const targetByKey = new Map<string, number>();
+    for (const c of targetYearClasses ?? []) {
+      targetByKey.set(`${c.grade_level}_${classSuffix(c.class_name)}`, c.class_id);
+    }
 
     const errors: string[] = [];
     let enrolled = 0;
@@ -514,99 +656,155 @@ export class YearTransitionService {
     // Trạng thái xét cuối năm (dựa trên student_year_results).
     const yearStatusByStudent = await yearResultStatusByStudent(fromYearId);
 
-    for (const s of students) {
-      const studentId = Number(s.student_id);
-      const gradeRaw = s.grade_level;
-      const grade = Number(gradeRaw);
-      const yearStatus = yearStatusByStudent.get(studentId) ?? '';
-      // Chưa có kết quả xét cuối năm: tính lại từ điểm TBCN thực tế (giống preview).
-      let suggestion;
-      if (!yearStatus) {
-        const avg = await computeYearAvg(studentId, fromYearId);
-        suggestion = suggestStatus(isNaN(grade) ? null : grade, avg);
-      } else {
-        suggestion = statusFromYearResult(isNaN(grade) ? null : grade, yearStatus);
+    // Điểm TBCN gộp một lần cho HS chưa có kết quả xét (tránh N+1 trong worker).
+    const noStatusIds = students
+      .filter((s: any) => !yearStatusByStudent.get(Number(s.student_id)))
+      .map((s: any) => Number(s.student_id));
+    const avgByStudent = await computeYearAvgsBulk(noStatusIds, fromYearId);
+
+    // Chạy song song (mỗi HS độc lập) để tránh chậm với nhiều học sinh.
+    const CONCURRENCY = 8;
+    let idx = 0;
+    const errorBuffer: string[] = [];
+
+    async function worker() {
+      while (true) {
+        const cur = idx++;
+        if (cur >= students.length) return;
+        const s = students[cur];
+
+        const studentId = Number(s.student_id);
+        const gradeRaw = s.grade_level;
+        const grade = Number(gradeRaw);
+        const yearStatus = yearStatusByStudent.get(studentId) ?? '';
+        // Chưa có kết quả xét cuối năm: tính lại từ điểm TBCN thực tế (giống preview).
+        let suggestion;
+        if (!yearStatus) {
+          suggestion = suggestStatus(isNaN(grade) ? null : grade, avgByStudent.get(studentId) ?? null);
+        } else {
+          suggestion = statusFromYearResult(isNaN(grade) ? null : grade, yearStatus);
+        }
+        const oldClassName = classById.get(s.class_id) ?? null;
+        const suffix = classSuffix(oldClassName);
+
+        const decision = decisionsByStudent.get(studentId);
+        // Quyết định ghi đè (nếu có), ngược lại dùng đề xuất tự động.
+        const status = decision && decision.status ? String(decision.status).toUpperCase() : suggestion.status;
+        const decisionClassId = validTargetClassIds.has(Number(decision?.class_id)) ? decision?.class_id : undefined;
+
+        // Xác định lớp mới.
+        let classId: number | null = null;
+        let gradeLevel: number | null = grade;
+        if (status === 'GRADUATED' || status === 'TRANSFERRED') {
+          classId = null;
+          gradeLevel = null;
+        } else if (status === 'PROMOTED') {
+          const nextGrade = grade < 9 ? grade + 1 : null;
+          gradeLevel = nextGrade;
+          classId = decisionClassId ?? (nextGrade != null ? (targetByKey.get(`${nextGrade}_${suffix}`) ?? null) : null);
+        } else { // RETAINED
+          gradeLevel = grade;
+          classId = decisionClassId ?? (targetByKey.get(`${grade}_${suffix}`) ?? null);
+        }
+
+        // upsert enrollment cho toYear — CHỈ cho HS còn học (PROMOTED / RETAINED).
+        // GRADUATED / TRANSFERRED không có enrollment ở năm mới (đã rời trường).
+        if (status === 'GRADUATED' || status === 'TRANSFERRED') {
+          const { error: delErr } = await supabase
+            .from('student_class_enrollments')
+            .delete()
+            .eq('student_id', studentId)
+            .eq('school_year_id', toYearId);
+          if (delErr) { errorBuffer.push(`Học sinh ${studentId} (xóa enrollment): ${delErr.message}`); continue; }
+        } else {
+          const { data: existing } = await supabase
+            .from('student_class_enrollments')
+            .select('enrollment_id')
+            .eq('student_id', studentId)
+            .eq('school_year_id', toYearId)
+            .maybeSingle();
+
+          const payload = {
+            student_id: studentId,
+            class_id: classId,
+            school_year_id: toYearId,
+            grade_level: gradeLevel,
+            status,
+          };
+
+          if (existing) {
+            const { error: upErr } = await supabase
+              .from('student_class_enrollments')
+              .update(payload)
+              .eq('enrollment_id', existing.enrollment_id);
+            if (upErr) { errorBuffer.push(`Học sinh ${studentId}: ${upErr.message}`); continue; }
+          } else {
+            const { error: insErr } = await supabase
+              .from('student_class_enrollments')
+              .insert(payload);
+            if (insErr) { errorBuffer.push(`Học sinh ${studentId}: ${insErr.message}`); continue; }
+          }
+        }
+
+        enrolled++;
+
+        // Cập nhật hồ sơ học sinh.
+        const studentUpdate: any = {};
+        if (status === 'GRADUATED') studentUpdate.status = 'GRADUATED';
+        else if (status === 'TRANSFERRED') studentUpdate.status = 'TRANSFERRED';
+        else studentUpdate.status = 'ACTIVE';
+
+        if (status === 'PROMOTED' || status === 'RETAINED') {
+          studentUpdate.class_id = classId;
+        } else {
+          studentUpdate.class_id = null;
+        }
+
+        const { error: stErr } = await supabase
+          .from('students')
+          .update(studentUpdate)
+          .eq('student_id', studentId);
+        if (stErr) errorBuffer.push(`Học sinh ${studentId} (hồ sơ): ${stErr.message}`);
       }
-      const oldClassName = classById.get(s.class_id) ?? null;
-      const suffix = classSuffix(oldClassName);
-
-      const decision = decisionsByStudent.get(studentId);
-      // Quyết định ghi đè (nếu có), ngược lại dùng đề xuất tự động.
-      const status = decision && decision.status ? String(decision.status).toUpperCase() : suggestion.status;
-      const decisionClassId = validTargetClassIds.has(Number(decision?.class_id)) ? decision?.class_id : undefined;
-
-      // Xác định lớp mới.
-      let classId: number | null = null;
-      let gradeLevel: number | null = grade;
-      if (status === 'GRADUATED' || status === 'TRANSFERRED') {
-        classId = null;
-        gradeLevel = null;
-      } else if (status === 'PROMOTED') {
-        const nextGrade = grade < 9 ? grade + 1 : null;
-        gradeLevel = nextGrade;
-        classId = decisionClassId ?? await findTargetClass(toYearId, nextGrade!, suffix);
-      } else { // RETAINED
-        gradeLevel = grade;
-        classId = decisionClassId ?? await findTargetClass(toYearId, grade, suffix);
-      }
-
-      // upsert enrollment cho toYear.
-      const { data: existing } = await supabase
-        .from('student_class_enrollments')
-        .select('enrollment_id')
-        .eq('student_id', studentId)
-        .eq('school_year_id', toYearId)
-        .maybeSingle();
-
-      const payload = {
-        student_id: studentId,
-        class_id: classId,
-        school_year_id: toYearId,
-        grade_level: gradeLevel,
-        status,
-      };
-
-      if (existing) {
-        const { error: upErr } = await supabase
-          .from('student_class_enrollments')
-          .update(payload)
-          .eq('enrollment_id', existing.enrollment_id);
-        if (upErr) { errors.push(`Học sinh ${studentId}: ${upErr.message}`); continue; }
-      } else {
-        const { error: insErr } = await supabase
-          .from('student_class_enrollments')
-          .insert(payload);
-        if (insErr) { errors.push(`Học sinh ${studentId}: ${insErr.message}`); continue; }
-      }
-
-      enrolled++;
-
-      // Cập nhật hồ sơ học sinh.
-      const studentUpdate: any = {};
-      if (status === 'GRADUATED') studentUpdate.status = 'GRADUATED';
-      else if (status === 'TRANSFERRED') studentUpdate.status = 'TRANSFERRED';
-      else studentUpdate.status = 'ACTIVE';
-
-      if (status === 'PROMOTED' || status === 'RETAINED') {
-        studentUpdate.class_id = classId;
-      } else {
-        studentUpdate.class_id = null;
-      }
-
-      const { error: stErr } = await supabase
-        .from('students')
-        .update(studentUpdate)
-        .eq('student_id', studentId);
-      if (stErr) errors.push(`Học sinh ${studentId} (hồ sơ): ${stErr.message}`);
     }
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    errors.push(...errorBuffer);
 
     if (errors.length > 0) {
       return error(errors.join('; '), 'PARTIAL_FAILURE');
     }
 
     // Đảm bảo năm mới có đủ học kỳ (gradebook/TKB phụ thuộc semesters).
-    await ensureSemesters(toYearId);
+    await ensureSemesters(toYearId, semesterOpts);
     return success({ enrolled });
+  }
+
+  // Tạo học kỳ 1 & 2 cho năm mới theo ngày nhập từ UI.
+  async createSemesters(yearId: number, opts: {
+    hk1Start?: string | null;
+    hk1End?: string | null;
+    hk2Start?: string | null;
+    hk2End?: string | null;
+  }) {
+    if (!yearId) return error('Thiếu năm học', 'BAD_REQUEST');
+    const { data: year } = await supabase
+      .from('school_years')
+      .select('school_year_id')
+      .eq('school_year_id', yearId)
+      .maybeSingle();
+    if (!year) return error('Không tìm thấy năm học', 'NOT_FOUND');
+
+    const { data: existing } = await supabase
+      .from('semesters')
+      .select('semester_id')
+      .eq('school_year_id', yearId);
+    if (existing && existing.length > 0) {
+      return error('Năm học này đã có học kỳ. Vui lòng xóa học kỳ hiện có trước khi tạo lại.', 'SEMESTERS_EXIST');
+    }
+
+    await ensureSemesters(yearId, opts);
+    return success({ created: 2 });
   }
 
   // Đánh dấu toYear là năm hiện tại (kích hoạt năm học mới).
@@ -648,6 +846,68 @@ export class YearTransitionService {
       totalStudents: studentCount ?? 0,
       totalEnrollments: enrCount ?? 0,
     });
+  }
+
+  // Xóa sạch dữ liệu của một năm học (enrollments, lớp, học kỳ, kết quả năm).
+  // Dùng để reset năm mới hoặc sau khi revert. Thứ tự xóa theo FK an toàn.
+  async clearYear(yearId: number) {
+    if (!yearId) return error('Thiếu yearId', 'VALIDATION_ERROR');
+
+    // Học kỳ (cascade xóa subject_results/timetables/teaching_assignments/exam_schedules).
+    await supabase.from('semesters').delete().eq('school_year_id', yearId);
+    // Enrollments của năm.
+    await supabase.from('student_class_enrollments').delete().eq('school_year_id', yearId);
+    await supabase.from('student_enrollments').delete().eq('school_year_id', yearId);
+    // Kết quả cuối năm của năm đó.
+    await supabase.from('student_year_results').delete().eq('school_year_id', yearId);
+    // Lớp (cascade TKB/teaching_assignments/exam_schedules/class_rooms; students.class_id SET NULL).
+    await supabase.from('classes').delete().eq('school_year_id', yearId);
+
+    return success({ cleared: true, yearId });
+  }
+
+  // Quay về năm cũ: reactivate năm cũ làm hiện tại + xóa dữ liệu năm mới đã tạo.
+  // fromYearId: năm cũ cần reactivate. toYearId: năm mới cần hủy.
+  async revertTransition(fromYearId: number, toYearId: number) {
+    if (!fromYearId || !toYearId) {
+      return error('Thiếu fromYearId / toYearId', 'VALIDATION_ERROR');
+    }
+    const fromYear = await getYearById(fromYearId);
+    if (!fromYear) return error('Không tìm thấy năm học cũ', 'NOT_FOUND');
+
+    // Khôi phục học sinh về đúng trạng thái năm cũ (class_id + status) từ enrollment năm cũ.
+    const { data: toEnrollments } = await supabase
+      .from('student_class_enrollments')
+      .select('student_id')
+      .eq('school_year_id', toYearId);
+    const studentIds = (toEnrollments ?? []).map((e: any) => e.student_id);
+
+    if (studentIds.length > 0) {
+      // Lấy enrollment năm cũ của từng HS (để lấy lại class_id + status).
+      const { data: fromEnrollments } = await supabase
+        .from('student_class_enrollments')
+        .select('student_id, class_id, status')
+        .eq('school_year_id', fromYearId)
+        .in('student_id', studentIds);
+
+      for (const fe of fromEnrollments ?? []) {
+        const patch: any = {};
+        if (fe.class_id != null) patch.class_id = fe.class_id;
+        else patch.class_id = null;
+        if (fe.status) patch.status = fe.status;
+        else patch.status = 'ACTIVE';
+        await supabase.from('students').update(patch).eq('student_id', fe.student_id);
+      }
+    }
+
+    // Xóa sạch dữ liệu năm mới.
+    await this.clearYear(toYearId);
+
+    // Reactivate năm cũ làm hiện tại.
+    await supabase.from('school_years').update({ is_current: false }).neq('school_year_id', fromYearId);
+    await supabase.from('school_years').update({ is_current: true }).eq('school_year_id', fromYearId);
+
+    return success({ reverted: true, fromYearId, toYearId });
   }
 }
 

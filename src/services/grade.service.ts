@@ -312,6 +312,10 @@ export class GradeService {
 			const sem2 = entry[2] || { freq: [], midTerm: '', finalTerm: '' };
 			const combinedFreq = [...(sem1.freq || []), ...(sem2.freq || [])];
 			const ranks = rankMap.get(s.student_id) || {};
+			// Gộp 2 học kỳ: "Chưa đạt" ưu tiên hơn (1 kỳ không đạt => cả năm không đạt).
+			const ranking = (ranks[1] === 'Chưa đạt' || ranks[2] === 'Chưa đạt')
+				? 'Chưa đạt'
+				: (ranks[1] === 'Đạt' || ranks[2] === 'Đạt') ? 'Đạt' : (ranks[2] || ranks[1] || '');
 			return {
 				student_id: s.student_id,
 				student_code: s.student_code,
@@ -319,7 +323,7 @@ export class GradeService {
 				freq: combinedFreq,
 				midTerm: sem2.midTerm || sem1.midTerm,
 				finalTerm: sem2.finalTerm || sem1.finalTerm,
-				ranking: ranks[2] || ranks[1] || '',
+				ranking,
 				sem1,
 				sem2,
 			};
