@@ -1,5 +1,6 @@
-﻿import { supabase } from '../config/supabase';
+import { supabase } from '../config/supabase';
 import { success, error as errResp } from '../utils/response';
+import bcrypt from 'bcrypt';
 
 export interface CreateUserInput {
   email: string;
@@ -189,6 +190,8 @@ export class UserService {
       return errResp(authError?.message || 'Tạo tài khoản thất bại', 'AUTH_ERROR');
     }
 
+    const hashedPassword = await bcrypt.hash(input.password, 10);
+
     const { data: newUser, error: userError } = await supabase
       .from('users')
       .insert({
@@ -196,6 +199,7 @@ export class UserService {
         email: input.email,
         username: input.username || input.email,
         phone: input.phone || null,
+        password: hashedPassword,
         role_id: roleId,
         is_active: input.is_active ?? true,
       })
@@ -285,7 +289,9 @@ export class UserService {
     if (patch.username !== undefined) updateData.username = patch.username;
     if (patch.phone !== undefined) updateData.phone = patch.phone;
     if (patch.is_active !== undefined) updateData.is_active = patch.is_active;
-    if (patch.password !== undefined) updateData.password = patch.password;
+    if (patch.password !== undefined) {
+      updateData.password = await bcrypt.hash(patch.password, 10);
+    }
     if (patch.department !== undefined && patch.department !== '') {
       const { data: deptRow } = await supabase.from('departments').select('department_id').eq('department_name', patch.department).maybeSingle();
       if (deptRow) updateData.department_id = deptRow.department_id;

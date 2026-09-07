@@ -68,7 +68,7 @@ function scoreFromItems(items: any[]): number | null {
 
 // Tính Điểm TBCN cho nhiều học sinh cùng lúc bằng 3 query gộp (tránh N+1).
 // Trả về Map<student_id, avg|null>.
-async function computeYearAvgsBulk(studentIds: number[], yearId: number): Promise<Map<number, number | null>> {
+export async function computeYearAvgsBulk(studentIds: number[], yearId: number): Promise<Map<number, number | null>> {
   const result = new Map<number, number | null>();
   if (studentIds.length === 0) return result;
   await getGradeTypeIds();

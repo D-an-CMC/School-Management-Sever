@@ -2,6 +2,7 @@ import { supabase } from '../config/supabase';
 import { success, error } from '../utils/response';
 import { buildPagination, paginate } from '../utils/pagination';
 import { generateStudentCode } from './user.service';
+import { computeYearAvgsBulk } from './year-transition.service';
 
 export class ClassService {
  async findMany(params: { teacherId?: number; schoolYearId?: number; page?: number; limit?: number }) {
@@ -200,6 +201,76 @@ export class ClassService {
 
  return success(result);
  }
+
+  async getAverageScoresStats(schoolYearId?: number) {
+    let classQuery = supabase.from('classes').select('class_id, class_name, grade_level, school_year_id');
+    
+    // Nếu không truyền schoolYearId, lấy năm học hiện tại
+    if (!schoolYearId) {
+      const { data: currentYear } = await supabase
+        .from('school_years')
+        .select('school_year_id')
+        .eq('is_current', true)
+        .maybeSingle();
+      schoolYearId = currentYear?.school_year_id ?? undefined;
+    }
+
+    if (schoolYearId) {
+      classQuery = classQuery.eq('school_year_id', schoolYearId);
+    }
+    const { data: classes, error: classError } = await classQuery;
+    if (classError) return error(classError.message, 'DB_ERROR');
+
+    const classIds = classes?.map(c => c.class_id) || [];
+    const { data: students } = classIds.length > 0 
+      ? await supabase.from('students').select('student_id, class_id').in('class_id', classIds) 
+      : { data: [] };
+    
+    const studentIds = students?.map(s => s.student_id) || [];
+    
+    // Sử dụng computeYearAvgsBulk để tính điểm trung bình thực tế cho toàn bộ học sinh
+    const scoreMap = (studentIds.length > 0 && schoolYearId) 
+      ? await computeYearAvgsBulk(studentIds, schoolYearId) 
+      : new Map<number, number | null>();
+
+    const gradeMap = new Map<number, any>();
+    for (const c of classes ?? []) {
+      const gl = c.grade_level;
+      if (!gl) continue;
+      if (!gradeMap.has(gl)) {
+        gradeMap.set(gl, { grade_level: gl, sum: 0, count: 0, classes: [] });
+      }
+
+      const classStudents = students?.filter(s => s.class_id === c.class_id) || [];
+      let cSum = 0;
+      let cCount = 0;
+      for (const s of classStudents) {
+        const score = scoreMap.get(s.student_id);
+        if (score != null) {
+          cSum += score;
+          cCount++;
+        }
+      }
+
+      // Chỉ dùng dữ liệu thật, trả về 0 nếu chưa có dữ liệu
+      const classAvg = cCount > 0 ? cSum / cCount : 0; 
+      
+      gradeMap.get(gl).classes.push({
+        class_name: c.class_name,
+        average_score: Number(classAvg.toFixed(2))
+      });
+      gradeMap.get(gl).sum += classAvg;
+      gradeMap.get(gl).count += 1;
+    }
+
+    const result = Array.from(gradeMap.values()).map(g => ({
+      grade_level: g.grade_level,
+      average_score: g.count > 0 ? Number((g.sum / g.count).toFixed(2)) : 0,
+      classes: g.classes.sort((a: any, b: any) => a.class_name.localeCompare(b.class_name))
+    })).sort((a, b) => a.grade_level - b.grade_level);
+
+    return success(result);
+  }
 
   async update(classId: number, data: { homeroom_teacher_id?: number | null; class_name?: string; grade_level?: number; fixed_room_id?: number | null }) {
     const updateData: any = {};

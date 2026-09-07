@@ -28,6 +28,26 @@ export class ActivityService {
       ...paginate(data || [], count || 0, params.page, params.limit),
     };
   }
+
+  async create(input: { activity_name: string; activity_type?: string; start_datetime: string; location?: string; description?: string }) {
+    const result = await supabase
+      .from('activities')
+      .insert({
+        activity_name: input.activity_name,
+        activity_type: input.activity_type || 'Thông báo',
+        start_datetime: input.start_datetime,
+        location: input.location,
+        description: input.description,
+      })
+      .select()
+      .single();
+
+    if (result.error || !result.data) {
+      return error('Tạo hoạt động thất bại', 'CREATE_FAILED');
+    }
+
+    return success(result.data);
+  }
 }
 
 export const activityService = new ActivityService();

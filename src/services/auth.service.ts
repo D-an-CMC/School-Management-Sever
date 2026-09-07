@@ -1,4 +1,5 @@
 import { supabase } from '../config/supabase';
+import bcrypt from 'bcrypt';
 import { signToken, JwtPayload } from '../utils/jwt';
 
 export interface LoginInput {
@@ -58,7 +59,11 @@ export class AuthService {
       });
       throw new Error('Tài khoản đã bị khóa');
     }
-    if (data.password !== input.password) {
+    if (!data.password) {
+      throw new Error('Tài khoản chưa được đặt mật khẩu hoặc lỗi dữ liệu');
+    }
+    const isMatch = await bcrypt.compare(input.password, data.password);
+    if (!isMatch) {
       const roleName = await this.getRoleName(data.role_id);
       await securityLogService.addLog({
         user_id: data.user_id,

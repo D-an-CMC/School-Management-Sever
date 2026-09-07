@@ -25,4 +25,23 @@ router.get('/', roleMiddleware(['Admin', 'GiaoVien', 'HocSinh-PhuHuynh']), async
   }
 });
 
+const createSchema = z.object({
+  activity_name: z.string().min(1),
+  activity_type: z.string().optional(),
+  start_datetime: z.string().min(1),
+  location: z.string().optional(),
+  description: z.string().optional(),
+});
+
+router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const data = createSchema.parse(req.body);
+    const result = await activityService.create(data);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message, code: 'VALIDATION_ERROR' });
+  }
+});
+
 export default router;

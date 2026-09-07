@@ -52,14 +52,15 @@ export class StudentService {
   }
 
   async getStats() {
-    const { count: totalStudents } = await supabase.from('students').select('*', { count: 'exact', head: true });
+    const { count: totalStudents } = await supabase.from('students').select('*', { count: 'exact', head: true }).neq('status', 'GRADUATED');
     return success({ totalStudents: totalStudents ?? 0, activeStudents: totalStudents ?? 0 });
   }
 
   async getStatsByGrade() {
     const { data, error: dbError } = await supabase
       .from('students')
-      .select('student_id, class_id, classes(grade_level, class_name)');
+      .select('student_id, class_id, classes(grade_level, class_name)')
+      .neq('status', 'GRADUATED');
 
     if (dbError) return error(dbError.message, 'DB_ERROR');
 
@@ -81,7 +82,10 @@ export class StudentService {
       }))
       .sort((a, b) => a.grade_level - b.grade_level);
 
-    const { count: totalAll } = await supabase.from('students').select('*', { count: 'exact', head: true });
+    const { count: totalAll } = await supabase
+      .from('students')
+      .select('*', { count: 'exact', head: true })
+      .neq('status', 'GRADUATED');
 
     return success({
       total: totalAll ?? 0,
@@ -90,18 +94,38 @@ export class StudentService {
   }
 
   async getAttendanceStats() {
-    const { data } = await supabase
+    // 1. Lấy tổng số học sinh toàn trường (nhóm theo khối)
+    const { data: students } = await supabase
       .from('students')
-      .select('student_id, class_id, classes(grade_level)');
+      .select('student_id, classes(grade_level)')
+      .neq('status', 'GRADUATED');
 
     const gradeStats: Record<number, { total: number; present: number }> = {};
 
-    for (const s of (data ?? [])) {
+    for (const s of (students ?? [])) {
       const gl = (s as any).classes?.grade_level;
       if (!gl) continue;
       if (!gradeStats[gl]) gradeStats[gl] = { total: 0, present: 0 };
       gradeStats[gl].total += 1;
-      gradeStats[gl].present += 1;
+    }
+
+    // 2. Lấy ngày điểm danh hôm nay (VN time UTC+7)
+    const now = new Date();
+    now.setHours(now.getHours() + 7);
+    const today = now.toISOString().split('T')[0];
+
+    // 3. Đếm số học sinh có mặt trong ngày hôm nay
+    const { data: records } = await supabase
+      .from('attendances')
+      .select('status, attendance_sessions!inner(class_id, classes(grade_level))')
+      .eq('attendance_sessions.attendance_date', today)
+      .eq('status', 'PRESENT');
+
+    for (const r of (records ?? [])) {
+      const gl = (r as any).attendance_sessions?.classes?.grade_level;
+      if (gl && gradeStats[gl]) {
+        gradeStats[gl].present += 1;
+      }
     }
 
     const grades = Object.entries(gradeStats)

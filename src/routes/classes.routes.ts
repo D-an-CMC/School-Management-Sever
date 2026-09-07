@@ -56,6 +56,17 @@ router.get('/stats/by-grade', roleMiddleware(['Admin']), async (req: any, res) =
   }
 });
 
+router.get('/stats/average-scores', roleMiddleware(['Admin']), async (req: any, res) => {
+  try {
+    const schoolYearId = req.query.schoolYearId ? Number(req.query.schoolYearId) : undefined;
+    const result = await classService.getAverageScoresStats(schoolYearId);
+    if (!result.success) return res.status(400).json(result);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
     const result = await classService.create(req.body);
