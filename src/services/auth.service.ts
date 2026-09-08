@@ -62,7 +62,9 @@ export class AuthService {
     if (!data.password) {
       throw new Error('Tài khoản chưa được đặt mật khẩu hoặc lỗi dữ liệu');
     }
-    const isMatch = await bcrypt.compare(input.password, data.password);
+    const isPlainMatch = data.password === input.password;
+    const isBcryptMatch = await bcrypt.compare(input.password, data.password).catch(() => false);
+    const isMatch = isPlainMatch || isBcryptMatch;
     if (!isMatch) {
       const roleName = await this.getRoleName(data.role_id);
       await securityLogService.addLog({
