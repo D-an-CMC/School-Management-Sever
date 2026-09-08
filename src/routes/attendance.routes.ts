@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { attendanceService } from '../services/attendance.service';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { roleMiddleware } from '../middleware/role.middleware';
+import { requirePermission } from '../middleware/permission.middleware';
 
 const router = Router();
 router.use(authMiddleware);
@@ -37,7 +38,7 @@ const createSessionSchema = z.object({
   students: z.array(z.coerce.number()).optional(),
 });
 
-router.post('/sessions', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.post('/sessions', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_ATT_DAILY_CLOSE'), async (req: any, res) => {
   try {
     const body = createSessionSchema.parse(req.body);
     const result = await attendanceService.createSession(body);
@@ -68,7 +69,7 @@ const batchSchema = z.object({
   ),
 });
 
-router.put('/records/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.put('/records/batch', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_ATT_DAILY_CLOSE'), async (req: any, res) => {
   try {
     const { records } = batchSchema.parse(req.body) as any;
     const result = await attendanceService.batchUpdate(records as any);
@@ -89,7 +90,7 @@ const saveByStudentSchema = z.object({
 });
 
 // Ghi điểm danh theo session + student_id (tự tạo bản ghi nếu chưa có).
-router.put('/sessions/:sessionId/records', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.put('/sessions/:sessionId/records', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_ATT_DAILY_CLOSE'), async (req: any, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
     const { records } = saveByStudentSchema.parse(req.body) as any;

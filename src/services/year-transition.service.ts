@@ -620,6 +620,65 @@ export class YearTransitionService {
       return error('Thiếu fromYearId / toYearId', 'VALIDATION_ERROR');
     }
 
+    // Kiểm tra điều kiện: Tất cả các lớp trong năm cũ phải hoàn thành Xét kết quả cuối năm.
+    const { data: fromYearClasses } = await supabase
+      .from('classes')
+      .select('class_id, class_name')
+      .eq('school_year_id', fromYearId);
+
+    const fromClassList = fromYearClasses ?? [];
+    if (fromClassList.length > 0) {
+      const classIds = fromClassList.map((c: any) => c.class_id);
+
+      // Đếm tổng số học sinh theo từng lớp
+      const studentCountByClass = new Map<number, number>();
+      const CHUNK = 900;
+      for (let i = 0; i < classIds.length; i += CHUNK) {
+        const chunk = classIds.slice(i, i + CHUNK);
+        const { data: sts } = await supabase
+          .from('students')
+          .select('student_id, class_id')
+          .in('class_id', chunk);
+        for (const st of sts ?? []) {
+          studentCountByClass.set(st.class_id, (studentCountByClass.get(st.class_id) || 0) + 1);
+        }
+      }
+
+      // Đếm số học sinh đã có final_result trong student_year_results
+      const { data: evaluatedResults } = await supabase
+        .from('student_year_results')
+        .select('student_id')
+        .eq('school_year_id', fromYearId)
+        .not('final_result', 'is', null);
+
+      const evaluatedStudentsSet = new Set((evaluatedResults ?? []).map((r: any) => r.student_id));
+
+      // Lấy danh sách student -> class để map
+      const pendingClassNames: string[] = [];
+      for (const c of fromClassList) {
+        const total = studentCountByClass.get(c.class_id) || 0;
+        if (total === 0) continue; // Lớp không có học sinh thì bỏ qua
+
+        // Kiểm tra xem tất cả HS của lớp này đã được xét chưa
+        const { data: classStudents } = await supabase
+          .from('students')
+          .select('student_id')
+          .eq('class_id', c.class_id);
+        
+        const evaluatedInClass = (classStudents ?? []).filter((s: any) => evaluatedStudentsSet.has(s.student_id)).length;
+        if (evaluatedInClass < total) {
+          pendingClassNames.push(`${c.class_name} (${evaluatedInClass}/${total})`);
+        }
+      }
+
+      if (pendingClassNames.length > 0) {
+        return error(
+          `Không thể chuyển năm học vì còn ${pendingClassNames.length} lớp chưa hoàn thành "Xét kết quả cuối năm": ${pendingClassNames.slice(0, 5).join(', ')}${pendingClassNames.length > 5 ? '...' : ''}. Vui lòng hoàn thành xét duyệt tại mục "Xét kết quả cuối năm" trước khi chuyển năm.`,
+          'EVALUATION_INCOMPLETE'
+        );
+      }
+    }
+
     const students = await studentsOfYear(fromYearId);
     if (students.length === 0) {
       return error('Không có học sinh trong năm học cũ', 'EMPTY');

@@ -1,14 +1,15 @@
 import { supabase } from '../config/supabase';
 import { success, error as errResp } from '../utils/response';
+import { clearPermissionCache } from '../middleware/permission.middleware';
 
 const MODULE_DEFS = [
   {
     id: 'grading',
     title: 'Quản lý điểm số',
     icon: 'grade',
-    permissionIds: [2, 6, 7, 8, 9],
+    permissionIds: [6, 7, 8, 9],
     items: [
-      { id: 'g1', label: 'Nhập điểm thành phần', permissionId: 6 },
+      { id: 'g1', label: 'Nhập & chỉnh sửa điểm thành phần', permissionId: 6 },
       { id: 'g2', label: 'Chỉnh sửa điểm đã khóa', permissionId: 7 },
       { id: 'g3', label: 'Phê duyệt bảng điểm tổng kết', permissionId: 8 },
       { id: 'g4', label: 'Xuất báo cáo học thuật', permissionId: 9 },
@@ -18,36 +19,36 @@ const MODULE_DEFS = [
     id: 'attendance',
     title: 'Điểm danh & Chuyên cần',
     icon: 'fact_check',
-    permissionIds: [3, 10, 11, 12, 13],
+    permissionIds: [10, 11, 12, 13],
     items: [
-      { id: 'a1', label: 'Chốt sổ điểm danh ngày', permissionId: 10 },
+      { id: 'a1', label: 'Tạo & lưu điểm danh buổi', permissionId: 10 },
       { id: 'a2', label: 'Xác nhận đơn xin nghỉ phép', permissionId: 11 },
-      { id: 'a3', label: 'Gửi thông báo vắng mặt tự động', permissionId: 12 },
-      { id: 'a4', label: 'Truy xuất lịch sử quét thẻ', permissionId: 13 },
+      { id: 'a3', label: 'Gửi thông báo vắng mặt', permissionId: 12 },
+      { id: 'a4', label: 'Truy xuất lịch sử điểm danh', permissionId: 13 },
     ],
   },
   {
-    id: 'finance',
-    title: 'Báo cáo tài chính & Học phí',
-    icon: 'analytics',
+    id: 'timetable',
+    title: 'Thời khóa biểu & Lịch thi',
+    icon: 'calendar_month',
     permissionIds: [14, 15, 16, 17],
     items: [
-      { id: 'f1', label: 'Xem dòng tiền tổng thể', permissionId: 14 },
-      { id: 'f2', label: 'Miễn giảm học phí đặc biệt', permissionId: 15 },
-      { id: 'f3', label: 'Đối soát thanh toán ngân hàng', permissionId: 16 },
-      { id: 'f4', label: 'Xóa hóa đơn đã phát hành', permissionId: 17 },
+      { id: 't1', label: 'Tạo & xếp lịch TKB tự động', permissionId: 14 },
+      { id: 't2', label: 'Chỉnh sửa / Đổi tiết thời khóa biểu', permissionId: 15 },
+      { id: 't3', label: 'Quản lý lịch thi & giám thị', permissionId: 16 },
+      { id: 't4', label: 'Xem thời khóa biểu toàn trường', permissionId: 17 },
     ],
   },
   {
-    id: 'iot',
-    title: 'Cấu hình thiết bị IoT',
-    icon: 'settings_input_component',
+    id: 'academic_records',
+    title: 'Lớp học & Xét kết quả cuối năm',
+    icon: 'school',
     permissionIds: [18, 19, 20, 21],
     items: [
-      { id: 'i1', label: 'Đăng ký thiết bị mới', permissionId: 18 },
-      { id: 'i2', label: 'Cập nhật Firmware từ xa', permissionId: 19 },
-      { id: 'i3', label: 'Thiết lập ngưỡng cảnh báo', permissionId: 20 },
-      { id: 'i4', label: 'Reset cấu hình mạng', permissionId: 21 },
+      { id: 'c1', label: 'Phân lớp / Thêm xóa học sinh vào lớp', permissionId: 18 },
+      { id: 'c2', label: 'Thực hiện Xét kết quả cuối năm', permissionId: 19 },
+      { id: 'c3', label: 'Kích hoạt Chuyển năm học mới', permissionId: 20 },
+      { id: 'c4', label: 'Chạy mô hình dự đoán AI học thuật', permissionId: 21 },
     ],
   },
 ];
@@ -136,6 +137,8 @@ export class PermissionService {
     const rows = permissionIds.map((pid) => ({ role_id: roleId, permission_id: pid }));
     const { error: insErr } = await supabase.from('role_permissions').insert(rows);
     if (insErr) return errResp(insErr.message, 'DB_ERROR');
+
+    clearPermissionCache(roleId);
 
     return success({ updated: permissionIds.length });
   }

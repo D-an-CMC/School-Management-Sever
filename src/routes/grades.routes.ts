@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { gradeService } from '../services/grade.service';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { roleMiddleware } from '../middleware/role.middleware';
+import { requirePermission } from '../middleware/permission.middleware';
 
 const router = Router();
 router.use(authMiddleware);
@@ -27,7 +28,7 @@ router.get('/types', async (_req, res) => {
   return res.json(result);
 });
 
-router.put('/items/:gradeItemId', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.put('/items/:gradeItemId', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_GRADING_ENTER'), async (req: any, res) => {
   try {
     const { score } = z.object({ score: z.coerce.number() }).parse(req.body);
     const result = await gradeService.updateGrade(Number(req.params.gradeItemId), score);
@@ -47,7 +48,7 @@ const batchSchema = z.object({
   ),
 });
 
-router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_GRADING_ENTER'), async (req: any, res) => {
   try {
     const { updates } = batchSchema.parse(req.body) as any;
     const result = await gradeService.batchUpdate(updates as any);
@@ -58,7 +59,7 @@ router.put('/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res
   }
 });
 
-router.post('/class/:classId/batch', roleMiddleware(['Admin', 'GiaoVien']), async (req: any, res) => {
+router.post('/class/:classId/batch', roleMiddleware(['Admin', 'GiaoVien']), requirePermission('PERM_GRADING_ENTER'), async (req: any, res) => {
   try {
     const classId = Number(req.params.classId);
     const { grades, subjectId, subject_id, semesterId } = req.body;

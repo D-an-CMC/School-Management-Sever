@@ -17,6 +17,7 @@ export interface AuthUser {
   avatar?: string;
   department?: string;
   classCode?: string;
+  permissions?: string[];
 }
 
 import { securityLogService } from './security-log.service';
@@ -102,6 +103,8 @@ export class AuthService {
       studentId = s?.student_id;
     }
 
+    const permissions = await this.getRolePermissions(data.role_id, roleName);
+
     const user: AuthUser = {
       id: data.user_id,
       email: data.email,
@@ -109,6 +112,7 @@ export class AuthService {
       name: data.username || data.email,
       teacherId,
       studentId,
+      permissions,
     };
 
     await securityLogService.addLog({
@@ -165,6 +169,8 @@ export class AuthService {
       studentId = s?.student_id;
     }
 
+    const permissions = await this.getRolePermissions(data.role_id, roleName);
+
     return {
       id: data.user_id,
       email: data.email,
@@ -172,7 +178,22 @@ export class AuthService {
       name: data.username || data.email,
       teacherId,
       studentId,
+      permissions,
     };
+  }
+
+  private async getRolePermissions(roleId?: number, roleName?: string): Promise<string[]> {
+    if (roleName?.toLowerCase() === 'admin') {
+      // Admin luôn có tất cả các quyền
+      const { data } = await supabase.from('permissions').select('permission_name');
+      return (data ?? []).map((p: any) => p.permission_name);
+    }
+    if (!roleId) return [];
+    const { data } = await supabase
+      .from('role_permissions')
+      .select('permissions(permission_name)')
+      .eq('role_id', roleId);
+    return (data ?? []).map((r: any) => r.permissions?.permission_name).filter(Boolean);
   }
 
   private async getRoleName(roleId?: number): Promise<string> {
