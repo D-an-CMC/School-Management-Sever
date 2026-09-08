@@ -27,6 +27,12 @@ const envSchema = z.object({
   AI_WRITE_MAX_ROWS: z.coerce.number().default(50),
   AI_RATE_LIMIT_PER_MIN: z.coerce.number().default(15),
   AI_HTTP_TIMEOUT_MS: z.coerce.number().default(300000),
+
+  // ── ML dự đoán điểm (modsves-ml-api / FastAPI) ───────────────────
+  // Base URL của ML API, ví dụ: http://127.0.0.1:8000 hoặc https://modsves-ml-api.onrender.com
+  // Nếu để trống → API /api/ml/* trả lỗi ML_NOT_CONFIGURED thay vì crash.
+  ML_API_URL: z.string().default(''),
+  ML_API_TIMEOUT_MS: z.coerce.number().default(15000),
 });
 
 export const env = envSchema.parse(process.env);

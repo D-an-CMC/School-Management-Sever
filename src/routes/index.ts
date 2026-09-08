@@ -19,6 +19,7 @@ import rulesRoutes from './rules.routes';
 import roomsRoutes from './rooms.routes';
 import yearTransitionRoutes from './year-transition.routes';
 import promotionEvaluationRoutes from './promotion-evaluation.routes';
+import mlRoutes from './ml.routes';
 
 const router = Router();
 
@@ -42,5 +43,6 @@ router.use('/rules', rulesRoutes);
 router.use('/rooms', roomsRoutes);
 router.use('/year-transition', yearTransitionRoutes);
 router.use('/year-results', promotionEvaluationRoutes);
+router.use('/ml', mlRoutes);
 
 export default router;
