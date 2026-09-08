@@ -35,7 +35,7 @@ const createSchema = z.object({
 
 router.post('/', roleMiddleware(['Admin']), async (req: any, res) => {
   try {
-    const data = createSchema.parse(req.body);
+    const data = createSchema.parse(req.body) as any;
     const result = await activityService.create(data);
     if (!result.success) return res.status(400).json(result);
     return res.json(result);
