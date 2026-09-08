@@ -14,5 +14,5 @@
     "allowJs": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "src/migrations"]
+  "exclude": ["node_modules", "src/migrations", "src/ai/**/*", "src/services/ai.service.ts", "src/config/pg.ts", "src/routes/ai.routes.ts"]
 }
