@@ -31,7 +31,7 @@ const envSchema = z.object({
   // ── ML dự đoán điểm (modsves-ml-api / FastAPI) ───────────────────
   // Base URL của ML API, ví dụ: http://127.0.0.1:8000 hoặc https://modsves-ml-api.onrender.com
   // Nếu để trống → API /api/ml/* trả lỗi ML_NOT_CONFIGURED thay vì crash.
-  ML_API_URL: z.string().default(''),
+  ML_API_URL: z.string().default('http://127.0.0.1:8000'),
   ML_API_TIMEOUT_MS: z.coerce.number().default(15000),
 });
 
