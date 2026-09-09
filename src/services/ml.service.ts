@@ -42,6 +42,10 @@ async function callMlPredict(payload: Record<string, any>): Promise<{ prediction
       throw new Error(json?.detail || json?.error || `ML_API_${res.status}`);
     }
     return { prediction: Number(json.prediction), model: String(json.model || '') };
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw new Error('ML_TIMEOUT');
+    if (err.message?.includes('fetch failed')) throw new Error(`Không thể kết nối dịch vụ ML tại ${base}. Vui lòng kiểm tra dịch vụ ML-LSTX.`);
+    throw err;
   } finally {
     clearTimeout(timer);
   }
